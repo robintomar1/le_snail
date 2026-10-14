@@ -15,6 +15,13 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Independent GPU reward study complete; reconcile before next experiment
+
+- `docs/research/reward-design-study-gpu.md` was frozen at12:15:03 UTC before reading the laptop study. SHA256 `be8496e40de714e43607bbd09a662c323d609cf465c0f7b349aa81f1764e2a24`. Two delegated agents handled primary-source/design and empirical work while main monitored coordination.
+- Read-only actual reward audits `runs/reward-study-gpu-returns-001` and`-002` both exited0,64 environments each, zero training, total254.085 seconds of GPU-process elapsed time. Evidence/compute ledger: `runs/reward-study-gpu-analysis-001`; saved learning curves: `runs/reward-study-gpu-curves-001`. New diagnostic script: `scripts/diagnose_reward_returns.py`. Frozen checkpoint/export hashes verified unchanged.
+- Successful scripted recovery pays a worse early4s return than holding; with latest crawl continuation its sampled mean discounted30s return beats holding on both sides. Learned deterministic/stochastic policies never recover; raw Gaussian actions clip and slew-limit heavily. This supports a recovery exploration/credit barrier, not proven critic failure, convergence or a globally anti-recovery reward. The64 nominal spatial replicas are not independent randomized trials; fault-absorbing returns have unequal active durations and later lane exits. Preserve these caveats.
+- Independent recommendation: validate an actor24/action teacher dataset, then consider ONE matched demonstration-loss versus unchanged-PPO pair, keeping reward/actor/official starts/actuators fixed. This is a proposal, not a launch. Recovery bank proposal002 remains on hold. Read the other report only after preserving our frozen independent report, then record agreements/disagreements separately and obtain the coordinated next decision.
+
 ### Revised bank proposal sent; training remains stopped
 
 - Laptop accepted the failed-bank stop and pushed598378a at11:56:11 UTC, then requested a revised proposal only. `runs/recovery-curriculum-proposal-002/proposal.json` recommends a bounded lower-band quasi-static audit (cosine0.2–0.5), longer settling, repeated passive validation and successful scripted active continuation from each bank state. No implementation or simulation launch is authorized by this proposal.
