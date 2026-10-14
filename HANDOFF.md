@@ -15,6 +15,16 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Supported-crawl experiment complete; straightness diagnosis next: 2026-10-14
+
+- `runs/crawl-supported-001` completed its 256-env x100-iteration cap (1,638,400 transitions, exit0). Export parity passes 2,048 observations with maximum error 7.153e-7. No budget extension was launched. Training log: `.setup/crawl-supported-001.log`.
+- Final randomized diagnostic: `runs/evaluation-supported-003/` (videos plus yaw traces), seed2000. Crawl stays above upright cosine0.8379, reaches peak27.50cm, then leaves the lane at8.9s with net23.75cm and lateral-15.03cm. Unwrapped heading changes -192.26 degrees. Videos show repeated supported movement with substantial turning, not the old fallen lurch; it still fails the agreed task. Left/right remain fallen for the full30s and fail recovery. No qualification/milestone passed.
+- Fixed evaluator timer accounting after a real long-trial reproduction: excluded settling was still counted in fallen_time and ended side trials at28.05 scored seconds. Reset fallen_time with the episode timer at scoring start. Both sides now reach30.0s without early simulator termination; failing and corrected runs are retained as evaluation-supported-001 and -002/-003.
+- Added diagnostic base_yaw_rad and unwrapped yaw_from_start_rad to evaluation traces/overlay, captured before automatic reset. These are scoring diagnostics only; the actor still has24 inputs. `--nominal-probe` allows comparison with nominal training physics and requires `--probe`; qualification stays randomized.
+- Laptop relayed robin's decision: **Option A first, reward-only straightness, keep the24-input contract**. Next compare the same export under nominal vs randomized physics, then propose ONE reward change and a separate bounded experiment. Heading observations remain out of scope without a later decision. Nominal comparison completed at `runs/evaluation-supported-nominal-001` (exit0): crawl also exits the lane at8.8s, net21.13cm, yaw -206.81 degrees. Turning therefore exists without evaluation randomization.
+- Evidence summary/contact sheets: `runs/reset-reward-analysis-001/`. All three final randomized videos are `runs/evaluation-supported-003/{crawl,left,right}-0.mp4`. Portable tests remain68+4subtests. Source implementation311c05c pushed by laptop; diagnostic/timer changes are included with this handoff update. A one-change yaw-cost continuation proposal is posted in the communication file; do not infer it has run.
+
+
 ### Phase 3 reset/reward correction and capped experiment: 2026-10-14
 
 - Active coordination is in `agents_communication.txt`. Read and answer laptop messages between work steps. Detached file watcher PID 2674421 appends to `.setup/communication-watch/updates.log`; it records changes but cannot start an agent turn. Laptop handles GitHub tracking/pushes and hardware; GPU handles simulation.

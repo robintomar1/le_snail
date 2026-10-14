@@ -227,6 +227,7 @@ class SnailEnv(DirectRLEnv):
 
     def _get_dones(self):
         self.last_transition = (self.robot.data.root_pos_w.clone(), self.robot.data.projected_gravity_b.clone(), self.protected_contact().clone())
+        self.last_transition_quat = self.robot.data.root_quat_w.clone()
         displacement = self.robot.data.root_pos_w - self.start_pos
         upright = -self.robot.data.projected_gravity_b[:, 2]
         self.fallen_time = torch.where(upright < 0.5, self.fallen_time + self.step_dt, 0.)

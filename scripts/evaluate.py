@@ -15,18 +15,22 @@ parser.add_argument('--video', action='store_true')
 parser.add_argument('--camera', choices=('follow', 'wide'), default='follow', help='Close base-following view or original fixed wide view')
 parser.add_argument('--probe', action='store_true', help='One diagnostic trial per start; cannot qualify a milestone')
 parser.add_argument('--probe-seconds', type=float, default=5., help='Diagnostic duration, bounded by each original trial deadline (default: 5)')
+parser.add_argument('--nominal-probe', action='store_true', help='Use nominal training physics for diagnostic comparison; requires --probe')
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 if args.output.exists():
     parser.error('--output must be new')
 if not 0 < args.probe_seconds <= 120:
     parser.error('--probe-seconds must be in (0, 120]')
+if args.nominal_probe and not args.probe:
+    parser.error('--nominal-probe requires --probe and cannot run qualification')
 if args.video:
     args.enable_cameras = True
 app = AppLauncher(args).app
 
 from dataclasses import asdict
 import json
+import math
 import numpy as np
 import torch
 from le_snail.bundle import load_bundle
@@ -41,11 +45,17 @@ try:
             raise ValueError('Evaluation asset differs from the training asset')
     args.output.mkdir(parents=True)
     device = args.device or 'cuda:0'
-    cfg = make_config(args.asset, args.bundle / 'policy.json', args.bundle / 'sim.json', num_envs=1, stage='robust', device=device, evaluation=True, seed=args.seed)
+    physics_stage = 'crawl' if args.nominal_probe else 'robust'
+    cfg = make_config(args.asset, args.bundle / 'policy.json', args.bundle / 'sim.json', num_envs=1, stage=physics_stage, device=device, evaluation=True, seed=args.seed)
     cfg.viewer.resolution = (960, 720)
     env = SnailEnv(cfg, render_mode='rgb_array' if args.video else None)
     policy = torch.jit.load(str(args.bundle / 'policy.pt'), map_location=device).eval()
     trials = []
+
+    def base_yaw(quaternion):
+        w, x, y, z = (float(v) for v in quaternion)
+        return math.atan2(2*(w*z + x*y), 1-2*(y*y + z*z))
+
     for kind in ('crawl', 'left', 'right'):
         env.cfg.initial_side = 'upright' if kind == 'crawl' else kind
         for index in range(1 if args.probe else 5):
@@ -61,6 +71,11 @@ try:
             start = env.robot.data.root_pos_w[0].clone()
             env.start_pos[0] = start
             env.episode_length_buf[:] = 0
+            # Settling is excluded from both the trial clock and the maximum
+            # fallen duration; otherwise side trials can stop at ~28 seconds.
+            env.fallen_time.zero_()
+            previous_yaw = base_yaw(env.robot.data.root_quat_w[0])
+            yaw_from_start = 0.
             trial = Trial(kind=kind)
             trace_path = args.output / f'{kind}-{index}.jsonl'
             writer = None
@@ -87,9 +102,14 @@ try:
                     pos, gravity, contact = env.last_transition
                     displacement = (pos[0] - start).cpu().numpy()
                     upright = float(-gravity[0, 2])
+                    yaw = base_yaw(env.last_transition_quat[0])
+                    yaw_from_start += (yaw - previous_yaw + math.pi) % (2*math.pi) - math.pi
+                    previous_yaw = yaw
                     elapsed = step * contract.dt
                     trial.update(elapsed, float(displacement[0]), float(displacement[1]), upright, fault=bool(term[0]))
-                    trace.write(json.dumps({'time_s': elapsed, 'forward_m': float(displacement[0]), 'lateral_m': float(displacement[1]), 'upright_cos': upright, 'terminated': bool(term[0]), 'truncated': bool(trunc[0])}) + '\n')
+                    trace.write(json.dumps({'time_s': elapsed, 'forward_m': float(displacement[0]), 'lateral_m': float(displacement[1]), 'upright_cos': upright,
+                                            'base_yaw_rad': yaw, 'yaw_from_start_rad': yaw_from_start,
+                                            'terminated': bool(term[0]), 'truncated': bool(trunc[0])}) + '\n')
                     if writer is not None:
                         frame = env.terminal_frame if bool(term[0] or trunc[0]) else env.render()
                         if frame is not None:
@@ -98,8 +118,8 @@ try:
                             from PIL import Image, ImageDraw
                             picture = Image.fromarray(np.asarray(frame, dtype=np.uint8))
                             draw = ImageDraw.Draw(picture)
-                            draw.rectangle((0, 0, 620, 30), fill='black')
-                            draw.text((8, 8), f'{kind}  t={elapsed:.2f}s  forward={displacement[0]:+.3f}m  lateral={displacement[1]:+.3f}m  upright={upright:+.2f}', fill='white')
+                            draw.rectangle((0, 0, 800, 30), fill='black')
+                            draw.text((8, 8), f'{kind}  t={elapsed:.2f}s  forward={displacement[0]:+.3f}m  lateral={displacement[1]:+.3f}m  upright={upright:+.2f}  yaw={math.degrees(yaw_from_start):+.1f}deg', fill='white')
                             writer.append_data(np.asarray(picture))
                     if bool(trunc[0]) and not trial.finished:
                         trial.finished, trial.reason = True, 'simulation_timeout'
@@ -112,6 +132,7 @@ try:
             print(kind, index, trial.reason, flush=True)
     report = summarize(trials)
     report.update({'seed': args.seed, 'camera': args.camera, 'probe_only': args.probe,
+                   'physics_stage': physics_stage,
                    'probe_seconds': args.probe_seconds if args.probe else None,
                    'bundle_manifest': manifest, 'trials': [asdict(t) for t in trials], 'physics_validated': manifest['physics_validated']})
     report['milestone_candidate'] = not args.probe and report['passed'] and manifest['physics_validated'] and manifest['stage'] == 'robust'
