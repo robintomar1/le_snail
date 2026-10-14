@@ -2,7 +2,7 @@
 
 SO-101 crawling and recovery with reinforcement learning in Isaac Lab, followed by local policy execution on a tethered physical arm. The accepted task is 50 cm of forward base displacement on tiles within 120 seconds, including recovery, in three of five trials. Left and right recovery are tested separately.
 
-The implementation includes asset preparation, three PPO training stages, policy export, evaluation, an IMU bridge, and a laptop controller. **No successful crawl or hardware transfer has been demonstrated yet.** Isaac, Docker builds, firmware, and hardware execution require validation on the target machines. The bundled physics values and initial poses are provisional.
+The implementation includes asset preparation, three PPO training stages, policy export, evaluation, an Xsens IMU reader, and a laptop controller. **No successful crawl or hardware transfer has been demonstrated yet.** Isaac, Docker builds, firmware, and hardware execution require validation on the target machines. The bundled physics values and initial poses are provisional.
 
 See [the design](docs/design.md), [simulation checks](docs/simulation.md), and [hardware integration](docs/hardware.md).
 
@@ -81,7 +81,7 @@ Evaluation runs five distance trials and five trials from each side, using held-
 
 ## Deploy
 
-Copy the entire `runs/robust/exported/` directory to the Ubuntu 22 laptop. Follow [hardware integration](docs/hardware.md) to acquire the IMU, flash the RP2040, map joints and frames, and verify timing. The training machine is not part of the live control loop.
+Copy the entire `runs/robust/exported/` directory to the Ubuntu 22 laptop. Follow [hardware integration](docs/hardware.md) to connect and verify the Xsens IMU, map joints and frames, and verify timing. The training machine is not part of the live control loop.
 
 Offline replay opens no hardware:
 
@@ -107,5 +107,5 @@ The runner refuses provisional physics, mismatched contracts, unfilled calibrati
 - `src/le_snail/evaluation.py`: distance and recovery acceptance rules.
 - `src/le_snail/hardware.py`: gripper/body mapping and timestamped IMU transport.
 - `configs/`: policy interface, provisional physics, and an unfilled hardware template.
-- `firmware/snail_imu/`: BNO08x reports over RP2040 USB serial.
+- `firmware/snail_imu/`: obsolete BNO08x/RP2040 bridge, superseded by the Xsens MTi-1s (`scripts/xsens_info.py`).
 - `scripts/`: asset fetch, simulation smoke test, training, evaluation, and deployment.

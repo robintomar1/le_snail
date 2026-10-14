@@ -67,7 +67,7 @@ def main():
     connected = False
     try:
         # Start sensors and warm up inference before enabling the robot connection.
-        imu = ImuSerial(config['imu_port'], config['imu_rotation_base_from_sensor'])
+        imu = ImuSerial(config['imu_port'], config['imu_rotation_base_from_sensor'], config['imu_baudrate'])
         with torch.inference_mode():
             policy(torch.zeros((1, 24)))
         time.sleep(0.2)

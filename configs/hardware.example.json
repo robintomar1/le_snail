@@ -5,6 +5,7 @@
   "robot_id": "REPLACE_EXISTING_CALIBRATION_ID",
   "calibration_dir": "/absolute/path/to/existing/so101_follower/calibration",
   "imu_port": "/dev/serial/by-id/REPLACE_IMU",
+  "imu_baudrate": null,
   "imu_rotation_base_from_sensor": [[1,0,0],[0,1,0],[0,0,1]],
   "mapping": {
     "radians_per_native_unit": [null,null,null,null,null,null],

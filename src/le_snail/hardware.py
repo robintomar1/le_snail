@@ -1,8 +1,8 @@
 """Calibrated unit mapping and timestamped IMU transport, independent of Isaac."""
 from __future__ import annotations
 
-import json
 import math
+import struct
 import threading
 import time
 
@@ -23,6 +23,8 @@ def validate_hardware_settings(config, contract):
     if not 0 < lo < hi:
         raise ValueError('Voltage limits must be positive and ordered')
     imu_base_vectors([1, 0, 0, 0], [0, 0, 0], config['imu_rotation_base_from_sensor'])
+    if type(config['imu_baudrate']) is not int or config['imu_baudrate'] <= 0:
+        raise ValueError('imu_baudrate must be a positive integer')
     mapping = JointMapping(config['mapping'])
     mapping.to_native(contract.lower_rad)
     mapping.to_native(contract.upper_rad)
@@ -57,35 +59,177 @@ class JointMapping:
         return {f'{name}.pos': float(value) for name, value in zip(JOINT_NAMES, native)}
 
 
+# Xsens Xbus constants, checked against Xsens' public driver sources (xspublic, in
+# github.com/xsenssupport/Xsens_MTi_ROS_Driver_and_Ntrip_Client @ 71c487c):
+#   framing/checksum: xscommon/xbus.{h,c}; message ids: xstypes/xsxbusmessageid.h;
+#   data identifiers: xstypes/xsdataidentifier.h; MTData2 item layout: xstypes/xsdatapacket.cpp.
+# All multi-byte fields are big-endian (XsMessage_getEndianCorrectData swaps them).
+XBUS_PREAMBLE = 0xFA
+XBUS_MASTER_DEVICE = 0xFF
+XBUS_EXTENDED_LENGTH = 0xFF
+XMID_REQ_DID = 0x00
+XMID_GOTO_MEASUREMENT = 0x10
+XMID_REQ_FIRMWARE_REVISION = 0x12
+XMID_REQ_PRODUCT_CODE = 0x1C
+XMID_GOTO_CONFIG = 0x30
+XMID_MTDATA2 = 0x36
+XMID_ERROR = 0x42
+XMID_REQ_AVAILABLE_FILTER_PROFILES = 0x62
+XMID_REQ_FILTER_PROFILE = 0x64
+XMID_REQ_OUTPUT_CONFIGURATION = 0xC0
+XMID_REQ_ALIGNMENT_ROTATION = 0xEC
+XDI_FULL_TYPE_MASK = 0xFFF0
+XDI_SUBFORMAT_MASK = 0x0003
+XDI_SUBFORMAT_FLOAT = 0x0000
+XDI_COORDSYS_MASK = 0x000C
+XDI_COORDSYS_ENU = 0x0000
+XDI_PACKET_COUNTER = 0x1020
+XDI_SAMPLE_TIME_FINE = 0x1060
+XDI_QUATERNION = 0x2010
+XDI_ACCELERATION = 0x4020
+XDI_RATE_OF_TURN = 0x8020
+SAMPLE_TIME_FINE_HZ = 10_000.0
+
+
+def xbus_frame(mid, payload=b'', bid=XBUS_MASTER_DEVICE):
+    """Encode one Xbus message: preamble, bus id, message id, length, payload, checksum."""
+    payload = bytes(payload)
+    if len(payload) < XBUS_EXTENDED_LENGTH:
+        header = bytes((bid, mid, len(payload)))
+    elif len(payload) <= 0xFFFF:
+        header = bytes((bid, mid, XBUS_EXTENDED_LENGTH)) + struct.pack('>H', len(payload))
+    else:
+        raise ValueError('Xbus payload too long')
+    body = header + payload
+    # The checksum makes the sum of every byte after the preamble zero modulo 256.
+    return bytes((XBUS_PREAMBLE,)) + body + bytes(((-sum(body)) & 0xFF,))
+
+
+class XbusReader:
+    """Incremental Xbus framer: resynchronizes on corrupt data but fails after persistent corruption."""
+    def __init__(self, max_buffer=8192, max_consecutive_errors=16):
+        self.buffer = bytearray()
+        self.max_buffer = max_buffer
+        self.max_consecutive_errors = max_consecutive_errors
+        self.consecutive_errors = 0
+
+    def _reject(self):
+        del self.buffer[0]
+        self.consecutive_errors += 1
+        if self.consecutive_errors > self.max_consecutive_errors:
+            raise ValueError('Persistent Xbus framing/checksum errors')
+
+    def feed(self, data):
+        self.buffer.extend(data)
+        messages = []
+        while True:
+            start = self.buffer.find(XBUS_PREAMBLE)
+            if start < 0:
+                self.buffer.clear()
+                break
+            del self.buffer[:start]
+            if len(self.buffer) < 4:
+                break
+            if self.buffer[3] == XBUS_EXTENDED_LENGTH:
+                if len(self.buffer) < 6:
+                    break
+                length, offset = struct.unpack_from('>H', self.buffer, 4)[0], 6
+            else:
+                length, offset = self.buffer[3], 4
+            total = offset + length + 1
+            if total > self.max_buffer:
+                self._reject()
+                continue
+            if len(self.buffer) < total:
+                break
+            if sum(self.buffer[1:total]) & 0xFF:
+                self._reject()
+                continue
+            messages.append((self.buffer[2], bytes(self.buffer[offset:total - 1])))
+            del self.buffer[:total]
+            self.consecutive_errors = 0
+        if len(self.buffer) > self.max_buffer:
+            raise ValueError('Xbus buffer exceeds size limit')
+        return messages
+
+
+def parse_mtdata2(payload):
+    """Split an MTData2 payload into {data identifier: bytes}; corrupt payloads raise."""
+    items, offset = {}, 0
+    while offset + 3 <= len(payload):
+        identifier, size = struct.unpack_from('>HB', payload, offset)
+        if offset + 3 + size > len(payload):
+            break
+        items[identifier] = payload[offset + 3:offset + 3 + size]
+        offset += 3 + size
+    if offset != len(payload):
+        raise ValueError('Corrupt MTData2 payload')
+    return items
+
+
+def _xsens_item(items, data_type, count, fmt, *, enu=False):
+    """Return one item only in a format this decoder handles; never reinterpret other formats/frames."""
+    matches = [i for i in items if i & XDI_FULL_TYPE_MASK == data_type]
+    if not matches:
+        raise ValueError(f'Xsens stream is missing data identifier 0x{data_type:04X}; check the output configuration')
+    identifier = matches[0]
+    if fmt == 'f':
+        if identifier & XDI_SUBFORMAT_MASK != XDI_SUBFORMAT_FLOAT:
+            raise ValueError(f'Xsens 0x{identifier:04X} is not float32 output')
+        if enu and identifier & XDI_COORDSYS_MASK != XDI_COORDSYS_ENU:
+            raise ValueError(f'Xsens 0x{identifier:04X} is not ENU; the gravity convention requires z up')
+    elif identifier != data_type:
+        raise ValueError(f'Unexpected Xsens identifier 0x{identifier:04X}')
+    data = items[identifier]
+    if len(data) != struct.calcsize(f'>{count}{fmt}'):
+        raise ValueError(f'Unexpected size for Xsens 0x{identifier:04X}')
+    return struct.unpack(f'>{count}{fmt}', data)
+
+
 class ImuDecoder:
+    """Decode Xsens MTData2 orientation/gyro packets into base-frame gravity and angular rate."""
     def __init__(self, mounting):
         self.mounting = mounting
-        self.last_seq = -1
-        self.last_sample_us = -1
+        self.seq = None
+        self.last_counter = None
+        self.last_sample_ticks = None
         self.clock_offset = None
 
-    def decode(self, line, received_at):
-        packet = json.loads(line)
-        seq, timestamp = packet['seq'], packet['sample_us']
-        if type(seq) is not int or type(timestamp) is not int or timestamp < 0:
-            raise ValueError('Invalid IMU sequence/timestamp')
-        if seq <= self.last_seq or timestamp <= self.last_sample_us:
+    def decode(self, payload, received_at):
+        items = parse_mtdata2(payload)
+        counter, = _xsens_item(items, XDI_PACKET_COUNTER, 1, 'H')
+        ticks, = _xsens_item(items, XDI_SAMPLE_TIME_FINE, 1, 'I')
+        # The orientation filter output is required; raw acceleration is never substituted for gravity.
+        q_wxyz = _xsens_item(items, XDI_QUATERNION, 4, 'f', enu=True)
+        gyro = _xsens_item(items, XDI_RATE_OF_TURN, 3, 'f')
+        # SampleTimeFine is 32-bit (wraps after ~119 h), so a decrease indicates a restart or replay.
+        if self.last_sample_ticks is not None and ticks <= self.last_sample_ticks:
             raise ValueError('IMU replay, clock reset, or out-of-order sample')
-        sensor_s = timestamp / 1e6
+        # PacketCounter wraps at 65536; unwrap it for a monotonic sequence and reject backwards steps.
+        if self.last_counter is None:
+            seq = counter
+        else:
+            step = (counter - self.last_counter) % 65536
+            if step == 0 or step >= 32768:
+                raise ValueError('IMU replay, clock reset, or out-of-order sample')
+            seq = self.seq + step
+        sensor_s = ticks / SAMPLE_TIME_FINE_HZ
         # Minimum observed transport offset approximates clock alignment without accepting queue buildup.
         offset = received_at - sensor_s
         self.clock_offset = offset if self.clock_offset is None else min(self.clock_offset, offset)
         sample_at = sensor_s + self.clock_offset
-        gravity, gyro = imu_base_vectors(packet['q_wxyz'], packet['gyro_rad_s'], self.mounting)
-        self.last_seq, self.last_sample_us = seq, timestamp
+        gravity, gyro = imu_base_vectors(q_wxyz, gyro, self.mounting)
+        self.seq, self.last_counter, self.last_sample_ticks = seq, counter, ticks
         return {'gravity': gravity, 'gyro': gyro, 'sample_at': sample_at, 'received_at': received_at, 'seq': seq}
 
 
 class ImuSerial:
-    def __init__(self, port, mounting, baudrate=460800):
+    """Read an Xsens MTi already in measurement mode. Never writes to the device."""
+    def __init__(self, port, mounting, baudrate):
         import serial
         self.serial = serial.Serial(port, baudrate=baudrate, timeout=0.05)
         self.serial.reset_input_buffer()
+        self.reader = XbusReader()
         self.decoder = ImuDecoder(mounting)
         self.latest = None
         self.error = None
@@ -95,26 +239,19 @@ class ImuSerial:
         self.thread.start()
 
     def _read(self):
-        # The first line can be a partial packet after opening/flushing the port.
-        synchronized = False
-        pending = bytearray()
         while not self.stop.is_set():
             try:
-                data = self.serial.read_until(b'\n', size=2048)
+                data = self.serial.read(self.serial.in_waiting or 1)
                 if not data:
                     continue
-                pending.extend(data)
-                if len(pending) > 4096:
-                    raise ValueError('IMU packet exceeds size limit')
-                if not pending.endswith(b'\n'):
-                    continue
-                line, pending = bytes(pending), bytearray()
-                if not synchronized:
-                    synchronized = True
-                    continue
-                decoded = self.decoder.decode(line, time.monotonic())
-                with self.lock:
-                    self.latest = decoded
+                received_at = time.monotonic()
+                for mid, payload in self.reader.feed(data):
+                    if mid == XMID_ERROR:
+                        raise RuntimeError(f'Xsens reported error code {payload.hex() or "(none)"}')
+                    if mid == XMID_MTDATA2:
+                        decoded = self.decoder.decode(payload, received_at)
+                        with self.lock:
+                            self.latest = decoded
             except Exception as exc:
                 with self.lock:
                     self.error = exc

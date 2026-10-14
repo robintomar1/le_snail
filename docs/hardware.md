@@ -1,6 +1,6 @@
 # Laptop and sensor integration
 
-The Ubuntu 22 laptop runs the exported policy locally. The arm uses its existing USB servo adapter and 7.4 V supply; a BNO085/BNO086 breakout and RP2040 add a second USB data connection. Include the sensor, bridge, mount and extra cable in mass and drag measurements.
+The Ubuntu 22 laptop runs the exported policy locally. The arm uses its existing USB servo adapter and 7.4 V supply; the Xsens MTi-1s board adds a second USB data connection. Include the sensor board, mount and extra cable in mass and drag measurements.
 
 ## Python environment
 
@@ -17,17 +17,33 @@ python -c 'from lerobot.robots.so_follower.so_follower import SO101Follower; fro
 
 Keep the resolved LeRobot commit and installed package versions with hardware logs. The exported manifest records the training Torch version; verify a replay on the laptop before live use. This setup has not yet been installed or exercised on the laptop.
 
-## IMU and firmware
+## IMU
 
-Use the breakout manufacturer's wiring and voltage guidance for the specific boards acquired. `firmware/snail_imu/snail_imu.ino` uses the RP2040 Arduino core, its default `Wire` I2C bus, and the Adafruit BNO08x library. Configure the board's I2C pins as needed. Install the library and its declared dependencies, select the actual RP2040 board, compile and upload in Arduino IDE or the equivalent CLI. Firmware compilation remains pending until the board/toolchain is available.
+The IMU is an Xsens MTi-1s development board connected directly to the laptop over USB (decided 2026-10-14). The earlier BNO085/BNO086 + RP2040 bridge in `firmware/snail_imu/` is obsolete and kept only as history.
 
-The bridge requests Game Rotation Vector and calibrated gyro reports at 100 Hz and emits newline-delimited JSON over USB serial. Quaternion order is **w,x,y,z**, angular-rate units are rad/s, and `sample_us` is an increasing 64-bit microcontroller timestamp. It reports the older arrival time of the paired reports; validate actual sensor and transport latency rather than treating this timestamp as perfect measurement time.
+`src/le_snail/hardware.py` reads the device's Xbus `MTData2` stream. The live reader never writes to the device. It requires these items in every packet and rejects anything else rather than reinterpreting it:
 
-```json
-{"seq": 1, "sample_us": 1234567, "q_wxyz": [1,0,0,0], "gyro_rad_s": [0,0,0]}
+| Item | Data identifier | Format required |
+| --- | --- | --- |
+| PacketCounter | `0x1020` | uint16, unwrapped into a monotonic sequence |
+| SampleTimeFine | `0x1060` | uint32 at 10 kHz; a decrease is treated as restart/replay |
+| Quaternion | `0x2010` | float32, **ENU** (z up), order w,x,y,z |
+| RateOfTurn | `0x8020` | float32, rad/s, sensor frame |
+
+Raw acceleration is never used as a gravity fallback. If the board has no orientation filter output, the reader refuses to run and an attitude estimator becomes a separate decision (#11).
+
+First connection, before any configuration change:
+
+```bash
+python scripts/xsens_info.py --port /dev/serial/by-id/REPLACE_IMU --baudrate BAUD \
+  --seconds 3 --raw-dump runs/xsens-first-connection.bin > runs/xsens-first-connection.json
 ```
 
-Mount the sensor rigidly and measure `imu_rotation_base_from_sensor`, the proper 3 by 3 rotation mapping sensor-frame vectors to the robot base. At upright rest, the computed base gravity vector should be near `[0,0,-1]`. Rotate about each base axis and confirm gyro signs; place the robot on each side and confirm gravity directions. Game Rotation Vector avoids a magnetometer but does not supply an absolute heading reference. See the [sensor datasheet](https://www.ceva-ip.com/wp-content/uploads/BNO080_085-Datasheet.pdf) and [library guidance](https://learn.adafruit.com/adafruit-9-dof-orientation-imu-fusion-breakout-bno085/arduino).
+It briefly enters configuration mode to read the device id, product code, firmware, stored output configuration, alignment rotations and filter profiles, then returns to measurement mode and samples the stream. It changes no stored settings. Keep the JSON report and raw byte dump; the dump becomes a test fixture. Record the working baud rate in `imu_baudrate`. Changing the stored output configuration is a deliberate operator step after reviewing that report. A stored sensor alignment rotation changes what the reported sensor frame means, so read it before measuring the mounting rotation.
+
+The device timestamp is its sample time; the laptop aligns it using the minimum observed transport offset. Validate actual sensor and transport latency rather than treating this alignment as perfect measurement time.
+
+Mount the sensor rigidly and measure `imu_rotation_base_from_sensor`, the proper 3 by 3 rotation mapping sensor-frame vectors to the robot base. At upright rest, the computed base gravity vector should be near `[0,0,-1]`. Rotate about each base axis and confirm gyro signs; place the robot on each side and confirm gravity directions. Only the gravity direction is used, so the quaternion's heading does not matter.
 
 ## Joint mapping
 
