@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "joint_names": ["shoulder_pan", "shoulder_lift", "elbow_flex", "wrist_flex", "wrist_roll", "gripper"],
+  "home_rad": [0.0, -0.6, 1.1, -0.5, 0.0, 0.35],
+  "lower_rad": [-1.85, -1.65, -1.60, -1.55, -2.65, 0.0],
+  "upper_rad": [1.85, 1.65, 1.60, 1.55, 2.75, 1.50],
+  "action_scale_rad": [1.0, 1.2, 1.2, 1.2, 1.5, 0.6],
+  "max_target_speed_rad_s": [1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+  "policy_hz": 20.0,
+  "velocity_filter_alpha": 0.25,
+  "observation_order": ["joint_position_minus_home_rad", "filtered_joint_velocity_rad_s", "gravity_base_unit", "gyro_base_rad_s", "previous_applied_action"],
+  "quaternion_order": "wxyz",
+  "parameters_measured": false
+}

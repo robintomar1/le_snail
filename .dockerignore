@@ -1,0 +1,14 @@
+.git
+.venv
+__pycache__
+.pytest_cache
+assets
+runs
+vendor
+.aws
+.codex
+.agents
+configs/hardware.local.json
+.remote-mount
+remote_gpu
+.setup

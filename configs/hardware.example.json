@@ -1,0 +1,22 @@
+{
+  "calibration_verified": false,
+  "contract_fingerprint": "REPLACE_WITH_EXPORTED_POLICY_FINGERPRINT",
+  "robot_port": "/dev/serial/by-id/REPLACE_ARM",
+  "robot_id": "REPLACE_EXISTING_CALIBRATION_ID",
+  "calibration_dir": "/absolute/path/to/existing/so101_follower/calibration",
+  "imu_port": "/dev/serial/by-id/REPLACE_IMU",
+  "imu_rotation_base_from_sensor": [[1,0,0],[0,1,0],[0,0,1]],
+  "mapping": {
+    "radians_per_native_unit": [null,null,null,null,null,null],
+    "offset_rad": [null,null,null,null,null,null],
+    "native_lower": [null,null,null,null,null,null],
+    "native_upper": [null,null,null,null,null,null]
+  },
+  "max_feedback_age_s": 0.1,
+  "max_tracking_error_rad": 0.35,
+  "start_tolerance_rad": 0.15,
+  "max_temperature_c": 55.0,
+  "voltage_range_v": [6.0, 8.4],
+  "voltage_v_per_register_unit": 0.1,
+  "telemetry_register_units_verified": false
+}

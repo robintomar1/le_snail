@@ -1,0 +1,313 @@
+#!/usr/bin/env python3
+"""Record simulation inspection evidence without changing measured-validation flags.
+
+Run inside Isaac with --headless --device cuda:0 --output NEW_DIRECTORY.
+Use --checks-only for the deterministic control-contract regression checks.
+"""
+import argparse
+import json
+from pathlib import Path
+import sys
+import traceback
+
+from isaaclab.app import AppLauncher
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('--asset', default='assets/so101/snail.urdf')
+parser.add_argument('--contract', default='configs/policy.json')
+parser.add_argument('--physics', default='configs/sim.json')
+parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--checks-only', action='store_true')
+AppLauncher.add_app_launcher_args(parser)
+args = parser.parse_args()
+if args.output.exists():
+    parser.error('--output must be new; inspection evidence is never overwritten')
+args.enable_cameras = not args.checks_only
+args.output.mkdir(parents=True)
+app = AppLauncher(args).app
+
+try:
+    import numpy as np
+    import torch
+    import imageio.v2 as imageio
+    from pxr import Usd, UsdGeom, UsdPhysics
+    from isaaclab.sensors import ContactSensor, ContactSensorCfg
+    from isaaclab.utils.math import quat_apply
+    from le_snail.contract import VelocityEstimator, rotation_matrix
+    from le_snail.sim.env import SnailEnv, make_config
+
+    class InspectionEnv(SnailEnv):
+        def _setup_scene(self):
+            super()._setup_scene()
+            self.contacts = ContactSensor(ContactSensorCfg(
+                prim_path='/World/envs/env_.*/Robot/.*', update_period=0.,
+            ))
+            self.scene.sensors['inspection_contacts'] = self.contacts
+
+    cfg = make_config(args.asset, args.contract, args.physics, num_envs=2,
+                      stage='crawl', evaluation=True, device=args.device or 'cuda:0')
+    cfg.robot_cfg.spawn.activate_contact_sensors = True
+    cfg.viewer.resolution = (960, 720)
+    env = InspectionEnv(cfg, render_mode=None if args.checks_only else 'rgb_array')
+    zero = torch.zeros((env.num_envs, 6), device=env.device)
+    report = {'checks': [], 'poses': {}, 'joint_probes': {}, 'tether_probes': [],
+              'physics_validated': False, 'visual_review_required': True}
+
+    def array(value):
+        return value.detach().cpu().numpy()
+
+    def check(name, passed, **evidence):
+        report['checks'].append({'name': name, 'passed': bool(passed), **evidence})
+        print(f'{"PASS" if passed else "FAIL"}: {name} {evidence}', flush=True)
+
+    def state():
+        return {'root_pos_m': array(env.robot.data.root_pos_w - env.scene.env_origins).tolist(),
+                'body_link_pose_w': array(env.robot.data.body_link_pose_w).tolist(),
+                'upright_cos': array(-env.robot.data.projected_gravity_b[:, 2]).tolist(),
+                'joint_rad': array(env.robot.data.joint_pos[:, env.joint_ids]).tolist(),
+                'joint_velocity_rad_s': array(env.robot.data.joint_vel[:, env.joint_ids]).tolist(),
+                'root_velocity': array(env.robot.data.root_vel_w).tolist(),
+                'contact_normal_forces_n': array(env.contacts.data.net_forces_w).tolist()}
+
+    # Public step outputs are compared with the actual targets sent to the drives.
+    for delay in (0, 1):
+        obs, _ = env.reset(seed=7)
+        env.delay_steps[:] = delay
+        estimator = VelocityEstimator(env.contract.velocity_filter_alpha)
+        initial = estimator.update(array(env.robot.data.joint_pos[0, env.joint_ids]), 0.)
+        check(f'reset_velocity_delay_{delay}', np.allclose(array(obs['policy'][0, 6:12]), initial, atol=1e-6))
+        action_error = observation_error = 0.
+        for step, amplitude in enumerate((0.4, -0.4, 0.2), 1):
+            actions = torch.full_like(zero, amplitude)
+            obs, reward, term, trunc, _ = env.step(actions)
+            applied = array(env.robot.data.joint_pos_target[0, env.joint_ids])
+            expected_action = env.contract.applied_action(applied)
+            if step == 1:
+                check(f'first_applied_target_delay_{delay}',
+                      np.allclose(applied, env.contract.home_rad if delay else
+                                  env.contract.position_target([amplitude]*6, env.contract.home_rad), atol=1e-6),
+                      applied_target_rad=applied.tolist(),
+                      observation_previous_action=array(obs['policy'][0, 18:]).tolist())
+            action_error = max(action_error, float(np.max(np.abs(array(obs['policy'][0, 18:]) - expected_action))))
+            q = array(env.robot.data.joint_pos[0, env.joint_ids])
+            velocity = estimator.update(q, step * env.step_dt)
+            expected_obs = env.contract.observation(q, velocity,
+                array(env.robot.data.projected_gravity_b[0]), array(env.robot.data.root_ang_vel_b[0]), applied)
+            observation_error = max(observation_error, float(np.max(np.abs(array(obs['policy'][0]) - expected_obs))))
+            assert torch.isfinite(obs['policy']).all() and torch.isfinite(reward).all()
+            assert not bool(term.any() or trunc.any()), 'Unexpected reset during contract probe'
+        check(f'applied_action_delay_{delay}', action_error < 1e-5, max_error=action_error)
+        check(f'portable_observation_delay_{delay}', observation_error < 1e-5, max_error=observation_error)
+
+    env.reset(seed=7)
+    env.delay_steps[:] = 1
+    estimator = VelocityEstimator(env.contract.velocity_filter_alpha)
+    estimator.update(array(env.robot.data.joint_pos[1, env.joint_ids]), 0.)
+    obs, *_ = env.step(torch.full_like(zero, .3))
+    estimator.update(array(env.robot.data.joint_pos[1, env.joint_ids]), env.step_dt)
+    pose = env.robot.data.root_link_pose_w[:1].clone()
+    pose[:, 1] += .3  # Only environment zero crosses the lane and auto-resets.
+    env.robot.write_root_pose_to_sim(pose, env_ids=torch.tensor([0], device=env.device))
+    obs, _, term, _, _ = env.step(torch.full_like(zero, -.3))
+    velocity = estimator.update(array(env.robot.data.joint_pos[1, env.joint_ids]), 2*env.step_dt)
+    check('partial_reset_history', bool(term[0] and not term[1]) and
+          np.allclose(array(obs['policy'][0, 18:]), 0., atol=1e-6) and
+          np.allclose(array(obs['policy'][1, 18:]), env.contract.applied_action(
+              array(env.robot.data.joint_pos_target[1, env.joint_ids])), atol=1e-6))
+    check('partial_reset_velocity', np.allclose(array(obs['policy'][0, 6:12]), 0., atol=1e-6) and
+          np.allclose(array(obs['policy'][1, 6:12]), velocity, atol=1e-5))
+
+    check('terminal_snapshot_precedes_reset',
+          float((env.last_transition[0][0] - env.scene.env_origins[0])[1]) > .15 and
+          abs(float((env.robot.data.root_pos_w[0] - env.scene.env_origins[0])[1])) < .01)
+    # Exercise public steps at the actual timeout boundary without simulating
+    # two minutes of idle physics. The upstream step increments this counter.
+    env.reset(seed=7)
+    env.episode_length_buf[:] = env.max_episode_length - 2
+    _, _, term, trunc, _ = env.step(zero)
+    check('not_truncated_before_120s', not bool(trunc.any() or term.any()),
+          scored_time_s=(env.max_episode_length - 1) * env.step_dt)
+    env.episode_length_buf[:] = env.max_episode_length - 1
+    _, _, term, trunc, _ = env.step(zero)
+    check('truncated_exactly_at_120s', bool(trunc.all()) and not bool(term.any()),
+          scored_time_s=env.max_episode_length * env.step_dt)
+
+    # Read the composed wrench before write_data_to_sim consumes it. This exercises
+    # the real environment force path, including frame rotation and COM offset.
+    for side in ('upright', 'left'):
+        env.cfg.initial_side = side
+        for name, velocity in (('rest', [0., 0., 0., 0., 0., 0.]),
+                               ('translate', [.2, -.1, 0., 0., 0., 0.]),
+                               ('rotate', [0., 0., 0., 0., 0., 2.])):
+            env.reset(seed=7)
+            env.drag[:] = .3
+            env.robot.write_root_velocity_to_sim(env.tensor(velocity).repeat(env.num_envs, 1))
+            env._apply_action()
+            body = env.base_ids[0]
+            q = env.robot.data.body_link_quat_w[:, body]
+            force = quat_apply(q, env.robot.instantaneous_wrench_composer.composed_force_as_torch[:, body])
+            torque = quat_apply(q, env.robot.instantaneous_wrench_composer.composed_torque_as_torch[:, body])
+            lever = quat_apply(q, env.tensor(env.physics['tether_attachment_base_m']).repeat(env.num_envs, 1))
+            lever -= env.robot.data.body_com_pos_w[:, body] - env.robot.data.body_link_pos_w[:, body]
+            com_velocity = env.robot.data.body_com_vel_w[:, body]
+            power = (force * com_velocity[:, :3]).sum(-1) + (torque * com_velocity[:, 3:]).sum(-1)
+            moment_error = (torque - torch.cross(lever, force, dim=-1)).abs().max()
+            magnitude = torch.linalg.vector_norm(force, dim=-1)
+            passed = bool((power <= 1e-7).all() and (magnitude <= .3 + 1e-6).all() and moment_error < 1e-6)
+            if name == 'rest':
+                passed = passed and bool(magnitude.max() < 1e-7)
+            check(f'tether_{side}_{name}', passed, max_power_w=float(power.max()), max_force_n=float(magnitude.max()))
+            report['tether_probes'].append({'pose': side, 'motion': name,
+                'force_world_n': array(force).tolist(), 'torque_world_nm': array(torque).tolist(),
+                'power_w': array(power).tolist(), 'moment_error_nm': float(moment_error)})
+
+    report['robot'] = {'fixed_base': env.robot.is_fixed_base, 'joint_names': env.robot.joint_names,
+        'body_names': env.robot.body_names, 'contact_body_names': env.contacts.body_names,
+        'masses_kg': array(env.robot.root_physx_view.get_masses()).tolist(),
+        'inertias_kg_m2': array(env.robot.root_physx_view.get_inertias()).tolist(),
+        'joint_limits_rad': array(env.robot.data.joint_pos_limits).tolist(),
+        'effort_limits_nm': array(env.robot.data.joint_effort_limits).tolist(),
+        'velocity_limits_rad_s': array(env.robot.data.joint_vel_limits).tolist()}
+
+    if not args.checks_only:
+        origin = array(env.scene.env_origins[0])
+        env.sim.set_camera_view(eye=origin + np.array([.65, .65, .45]),
+                                target=origin + np.array([0., 0., .16]))
+        # Inventory authored collision approximations, without claiming they are
+        # identical to the cooked PhysX hulls.
+        prims = [p for p in Usd.PrimRange(env.sim.stage.GetPrimAtPath('/World/envs/env_0/Robot'), Usd.TraverseInstanceProxies())]
+        report['colliders'] = [{'path': str(p.GetPath()), 'type': p.GetTypeName(),
+            'approximation': str(UsdPhysics.MeshCollisionAPI(p).GetApproximationAttr().Get())}
+            for p in prims if p.HasAPI(UsdPhysics.CollisionAPI)]
+        env.sim.stage.Flatten().Export(str(args.output / 'stage.usda'))
+        # Transform authored mesh vertices using live body poses. USD/Fabric's
+        # presentation transforms need not be updated by each physics step.
+        collision_vertices = []
+        transforms = UsdGeom.XformCache()
+        for prim in prims:
+            if not prim.IsA(UsdGeom.Mesh):
+                continue
+            collider = prim
+            while collider and not collider.HasAPI(UsdPhysics.CollisionAPI) and not collider.HasAPI(UsdPhysics.RigidBodyAPI):
+                collider = collider.GetParent()
+            if not collider or not collider.HasAPI(UsdPhysics.CollisionAPI):
+                continue
+            body = prim
+            while body and not body.HasAPI(UsdPhysics.RigidBodyAPI):
+                body = body.GetParent()
+            if not body:
+                raise RuntimeError(f'Collider has no rigid body: {prim.GetPath()}')
+            matrix, _ = transforms.ComputeRelativeTransform(prim, body)
+            matrix = np.array(matrix)
+            vertices = np.array(UsdGeom.Mesh(prim).GetPointsAttr().Get())
+            local = vertices @ matrix[:3, :3] + matrix[3, :3]
+            mesh = UsdGeom.Mesh(prim)
+            collision_vertices.append((str(prim.GetPath()), env.robot.body_names.index(body.GetName()), local,
+                mesh.GetFaceVertexCountsAttr().Get(), mesh.GetFaceVertexIndicesAttr().Get()))
+        if not collision_vertices:
+            raise RuntimeError('No authored collision mesh vertices found; clearance evidence would be empty')
+
+        def mesh_clearance():
+            poses = array(env.robot.data.body_link_pose_w[0])
+            return [{'path': path, 'min_z_m': float((points @ rotation_matrix(poses[index, 3:]).T + poses[index, :3])[:, 2].min())}
+                    for path, index, points, _, _ in collision_vertices]
+
+        def collision_view(destination):
+            # Render authored collision triangles as non-physical display meshes.
+            # These show source surfaces, not the separately cooked convex hulls.
+            poses = array(env.robot.data.body_link_pose_w[0])
+            for number, (_, index, points, counts, indices) in enumerate(collision_vertices):
+                mesh = UsdGeom.Mesh.Define(env.sim.stage, f'/InspectionGeometry/mesh_{number}')
+                mesh.CreatePointsAttr(points @ rotation_matrix(poses[index, 3:]).T + poses[index, :3])
+                mesh.CreateFaceVertexCountsAttr(counts)
+                mesh.CreateFaceVertexIndicesAttr(indices)
+                mesh.CreateDisplayColorAttr([(0.05, .6, .75)])
+                mesh.CreateDoubleSidedAttr(True)
+            robots = UsdGeom.Imageable(env.sim.stage.GetPrimAtPath('/World/envs'))
+            robots.MakeInvisible()
+            try:
+                for _ in range(5):
+                    picture = frame()
+                imageio.imwrite(destination, picture)
+            finally:
+                robots.MakeVisible()
+                env.sim.stage.RemovePrim('/InspectionGeometry')
+
+        def frame():
+            picture = env.render()
+            if picture is None or not picture.size:
+                raise RuntimeError('Renderer did not produce an image')
+            return picture
+
+        for side in ('upright', 'left', 'right'):
+            env.cfg.initial_side = side
+            env.reset(seed=7)
+            samples = [{'time_s': 0., **state()}]
+            clearances = {'initial': mesh_clearance()}
+            # Warm the renderer without advancing physics.
+            for _ in range(5):
+                picture = frame()
+            imageio.imwrite(args.output / f'{side}-initial.png', picture)
+            faults = []
+            with imageio.get_writer(args.output / f'{side}.mp4', fps=20) as writer:
+                writer.append_data(picture)
+                for step in range(1, 101):
+                    obs, reward, term, trunc, _ = env.step(zero)
+                    samples.append({'time_s': step * env.step_dt, **state()})
+                    writer.append_data(frame())
+                    if step in (40, 100):
+                        clearances[f'{step * env.step_dt:.0f}s'] = mesh_clearance()
+                        imageio.imwrite(args.output / f'{side}-{step * env.step_dt:.0f}s.png', frame())
+                    if bool(term.any() or trunc.any()):
+                        faults.append(step)
+                        break  # Do not present an auto-reset as continued motion.
+            (args.output / f'{side}.json').write_text(json.dumps(samples, indent=2) + '\n')
+            report['poses'][side] = {'initial': samples[0], 'final': samples[-1], 'fault_steps': faults,
+                                    'authored_collision_mesh_clearances': clearances}
+            collision_view(args.output / f'{side}-authored-collisions.png')
+            print(f'POSE {side}: final upright {samples[-1]["upright_cos"]}, faults {faults}', flush=True)
+
+        env.cfg.initial_side = 'upright'
+        for joint, name in enumerate(env.contract.joint_names):
+            env.reset(seed=7)
+            for _ in range(40):
+                env.step(zero)
+            start = array(env.robot.data.joint_pos[:, env.joint_ids]).copy()
+            max_speed = max_effort = max_slew = 0.
+            previous = env.robot.data.joint_pos_target[:, env.joint_ids].clone()
+            records = []
+            for step in range(60):
+                actions = zero.clone()
+                actions[:, joint] = .15 if step < 30 else -.15
+                obs, reward, term, trunc, _ = env.step(actions)
+                applied = env.robot.data.joint_pos_target[:, env.joint_ids]
+                max_slew = max(max_slew, float(((applied - previous).abs() / env.step_dt).max()))
+                previous = applied.clone()
+                max_speed = max(max_speed, float(env.robot.data.joint_vel.abs().max()))
+                max_effort = max(max_effort, float(env.robot.data.applied_torque.abs().max()))
+                records.append({'time_s': (step+1)*env.step_dt, **state(), 'target_rad': array(applied).tolist()})
+                if bool(term.any() or trunc.any()):
+                    break
+            report['joint_probes'][name] = {'start_joint_rad': start.tolist(),
+                'final_joint_rad': records[-1]['joint_rad'], 'steps': len(records),
+                'max_all_joint_speed_rad_s': max_speed, 'max_estimated_drive_effort_nm': max_effort,
+                'max_target_slew_rad_s': max_slew}
+            (args.output / f'joint-{name}.json').write_text(json.dumps(records, indent=2) + '\n')
+            check(f'target_slew_{name}', max_slew <= max(env.contract.max_target_speed_rad_s) + 1e-4,
+                  max_target_speed_rad_s=max_slew)
+
+    report['automated_checks_passed'] = all(c['passed'] for c in report['checks'])
+    (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
+    env.close()
+    if not report['automated_checks_passed']:
+        raise AssertionError('Inspection checks failed; see report.json')
+    print(f'Inspection checks passed; visual/physical validation still required: {args.output}', flush=True)
+except BaseException:
+    traceback.print_exc()
+    import omni.kit.app
+    omni.kit.app.get_app().post_quit(1)
+    raise
+finally:
+    sys.stdout.flush()
+    sys.stderr.flush()
+    app.close()
