@@ -14,6 +14,8 @@ parser.add_argument('--physics', default='configs/sim.json')
 parser.add_argument('--stage', choices=['crawl', 'recover', 'robust'], default='crawl')
 parser.add_argument('--num-envs', type=int, default=256)
 parser.add_argument('--iterations', type=int, default=1000)
+parser.add_argument('--num-mini-batches', type=int, default=4)
+parser.add_argument('--save-interval', type=int, default=100)
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--resume', type=Path)
 parser.add_argument('--output', type=Path, required=True)
@@ -21,6 +23,10 @@ AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 if args.iterations < 1 or args.num_envs < 1:
     parser.error('Iterations and environment count must be positive')
+if args.num_mini_batches < 1 or (args.num_envs * 64) % args.num_mini_batches:
+    parser.error('--num-mini-batches must be positive and divide num-envs * 64')
+if args.save_interval < 1:
+    parser.error('--save-interval must be positive')
 if args.output.exists():
     parser.error('--output must be a new directory to preserve earlier experiments')
 app = AppLauncher(args).app
@@ -63,13 +69,13 @@ try:
     shutil.copy2(source, run / 'asset.source.json')
     config = {
         'seed': args.seed, 'device': device, 'num_steps_per_env': 64,
-        'save_interval': 100, 'logger': 'tensorboard', 'obs_groups': {'policy': ['policy'], 'critic': ['policy']},
+        'save_interval': args.save_interval, 'logger': 'tensorboard', 'obs_groups': {'policy': ['policy'], 'critic': ['policy']},
         'policy': {'class_name': 'ActorCritic', 'init_noise_std': 0.5,
                    'actor_obs_normalization': True, 'critic_obs_normalization': True,
                    'actor_hidden_dims': [128, 128], 'critic_hidden_dims': [128, 128], 'activation': 'elu'},
         'algorithm': {'class_name': 'PPO', 'value_loss_coef': 1., 'use_clipped_value_loss': True,
                       'clip_param': 0.2, 'entropy_coef': 0.01, 'num_learning_epochs': 5,
-                      'num_mini_batches': 4, 'learning_rate': 3e-4, 'schedule': 'adaptive',
+                      'num_mini_batches': args.num_mini_batches, 'learning_rate': 3e-4, 'schedule': 'adaptive',
                       'gamma': 0.995, 'lam': 0.95, 'desired_kl': 0.01, 'max_grad_norm': 1.},
     }
     (run / 'run.json').write_text(json.dumps({'stage': args.stage, 'seed': args.seed, 'iterations': args.iterations, 'num_envs': args.num_envs, 'runner': config,
