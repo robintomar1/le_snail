@@ -15,6 +15,14 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Straightness continuation approved; large pair held: 2026-10-14
+
+- Laptop GO for `crawl-straight-001`: resume `runs/crawl-supported-001/model_final.pt`, seed42,256 environments,100 NEW iterations maximum. Only reward change is yaw cost `-dt * (1-cos(yaw-yaw_at_reset))`, weight1.0. Config: `configs/experiments/crawl-straight-001.json`. Contract/physics/reset states/other rewards unchanged. This diagnostic continuation retains the supported gait; critic estimates must adapt to the changed reward.
+- Real-environment red/green regression: `runs/straight-reward-before-001` fails the missing yaw cost; `runs/straight-reward-after-001` passes35 checks including aligned/quarter-turn/half-turn/full-turn costs and independent heading origins on partial reset. Portable suite70+4subtests passes. Source rebuild/smoke pending before launch at this note.
+- User also requested a larger matched treatment/control pair via laptop. **Do not launch that pair until explicit GO-SCALE/GPU-sharing confirmation in communication file.** Pre-stage only: both arms should start from the SAME checkpoint, same seed/environment/budget/minibatches; checkpoint/video review every50 new iterations. Do not confound treatment with extra pretraining. Small-run outcome must inform the treatment choice.
+- Communication: use `python3 .setup/communication-watch/read_new.py` to read ALL unread appended messages using a persisted cursor, rather than a short tail that can miss long messages. Detached watcher still records updates. Continue responding in the append-only communication file.
+
+
 ### Supported-crawl experiment complete; straightness diagnosis next: 2026-10-14
 
 - `runs/crawl-supported-001` completed its 256-env x100-iteration cap (1,638,400 transitions, exit0). Export parity passes 2,048 observations with maximum error 7.153e-7. No budget extension was launched. Training log: `.setup/crawl-supported-001.log`.

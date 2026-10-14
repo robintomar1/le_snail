@@ -41,6 +41,8 @@ def load_physics(path):
         bounds = config['positive_progress_upright_range']
         if len(bounds) != 2 or not all(math.isfinite(x) for x in bounds) or not -1 <= bounds[0] < bounds[1] <= 1:
             raise ValueError('Progress posture gate requires an increasing interval within [-1, 1]')
+    if 'yaw_cost_weight' in config and (not math.isfinite(config['yaw_cost_weight']) or config['yaw_cost_weight'] < 0):
+        raise ValueError('Yaw cost weight must be finite and nonnegative')
     if 'settled_starts' in config:
         if set(config['settled_starts']) != {'upright', 'left', 'right'}:
             raise ValueError('Settled starts require upright, left and right states')

@@ -115,6 +115,7 @@ class SnailEnv(DirectRLEnv):
         self.observation_cache = torch.zeros((self.num_envs, 24), device=self.device)
         self.observation_step = -1
         self.start_pos = self.robot.data.root_pos_w.clone()
+        self.start_yaw = torch.zeros(self.num_envs, device=self.device)
         self.previous_x = self.start_pos[:, 0].clone()
         self.fallen_time = torch.zeros(self.num_envs, device=self.device)
         self.drag = torch.zeros(self.num_envs, device=self.device)
@@ -220,10 +221,18 @@ class SnailEnv(DirectRLEnv):
             'time': torch.full_like(progress, -self.step_dt * .02),
             'protected_contact': -self.protected_contact().float(),
         }
+        if self.physics.get('yaw_cost_weight', 0.) > 0:
+            heading_error = self.yaw(self.robot.data.root_quat_w) - self.start_yaw
+            self.reward_components['yaw'] = -self.step_dt * self.physics['yaw_cost_weight'] * (1-torch.cos(heading_error))
         stats = {f'Reward/{name}': value.mean().detach() for name, value in self.reward_components.items()}
         stats['Reward/gated_out_progress'] = (30. * (progress - credited)).mean().detach()
         self.extras['log'] = {**self.extras.get('log', {}), **stats}
         return sum(self.reward_components.values())
+
+    @staticmethod
+    def yaw(quaternion):
+        w, x, y, z = quaternion.unbind(-1)
+        return torch.atan2(2*(w*z + x*y), 1-2*(y*y + z*z))
 
     def _get_dones(self):
         self.last_transition = (self.robot.data.root_pos_w.clone(), self.robot.data.projected_gravity_b.clone(), self.protected_contact().clone())
@@ -286,6 +295,7 @@ class SnailEnv(DirectRLEnv):
         self.previous_q[env_ids] = joints[:, self.joint_ids]
         self.filtered_velocity[env_ids] = 0.
         self.start_pos[env_ids] = state[:, :3]
+        self.start_yaw[env_ids] = self.yaw(state[:, 3:7])
         self.previous_x[env_ids] = state[:, 0]
         self.fallen_time[env_ids] = 0.
         self.observation_step = -1

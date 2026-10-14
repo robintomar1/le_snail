@@ -32,7 +32,7 @@ try:
     import imageio.v2 as imageio
     from pxr import Usd, UsdGeom, UsdPhysics
     from isaaclab.sensors import ContactSensor, ContactSensorCfg
-    from isaaclab.utils.math import quat_apply
+    from isaaclab.utils.math import quat_apply, quat_mul
     from le_snail.contract import VelocityEstimator, rotation_matrix
     from le_snail.sim.env import SnailEnv, make_config
 
@@ -172,6 +172,38 @@ try:
                       not bool(term.any() or trunc.any()) and torch.allclose(reward, sum(env.reward_components.values())),
                       displacement_m=array(dx).tolist(), progress_reward=array(credited).tolist(),
                       upright_cos=array(posture).tolist())
+
+    if 'yaw_cost_weight' in env.physics:
+        env.cfg.initial_side = 'upright'
+        original_pose = list(env.physics['settled_starts']['upright']['root_pose'])
+        quarter_turn = env.tensor([np.cos(np.pi/4), 0., 0., np.sin(np.pi/4)])
+        rotated = quat_mul(quarter_turn, env.tensor(original_pose[3:]))
+        env.physics['settled_starts']['upright']['root_pose'][3:] = array(rotated).tolist()
+        try:
+            for angle in (0., np.pi/2, np.pi, 2*np.pi):
+                env.reset(seed=7)
+                pose = env.robot.data.root_link_pose_w.clone()
+                rotation = env.tensor([np.cos(angle/2), 0., 0., np.sin(angle/2)]).repeat(env.num_envs, 1)
+                pose[:, 3:] = quat_mul(rotation, pose[:, 3:])
+                env.robot.write_root_pose_to_sim(pose)
+                env._get_rewards()
+                yaw_cost = env.reward_components.get('yaw', torch.zeros(env.num_envs, device=env.device))
+                expected = -env.step_dt * env.physics['yaw_cost_weight'] * (1-np.cos(angle))
+                check(f'relative_yaw_cost_{angle:.3f}', 'yaw' in env.reward_components and
+                      torch.allclose(yaw_cost, torch.full_like(yaw_cost, expected), atol=1e-6),
+                      reward=array(yaw_cost).tolist(), expected=expected)
+            env.reset(seed=7)
+            pose = env.robot.data.root_link_pose_w.clone()
+            pose[:, 3:] = quat_mul(quarter_turn.repeat(env.num_envs, 1), pose[:, 3:])
+            env.robot.write_root_pose_to_sim(pose)
+            env._reset_idx(torch.tensor([0], device=env.device))
+            env._get_rewards()
+            yaw_cost = env.reward_components.get('yaw', torch.zeros(env.num_envs, device=env.device))
+            check('relative_yaw_partial_reset', 'yaw' in env.reward_components and
+                  abs(float(yaw_cost[0])) < 1e-6 and
+                  abs(float(yaw_cost[1]) + env.step_dt * env.physics['yaw_cost_weight']) < 1e-6)
+        finally:
+            env.physics['settled_starts']['upright']['root_pose'] = original_pose
 
     # Read the composed wrench before write_data_to_sim consumes it. This exercises
     # the real environment force path, including frame rotation and COM offset.
