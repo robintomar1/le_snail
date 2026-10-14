@@ -28,7 +28,7 @@ PYTHONPATH=src PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python3 -m pytest -q -c /dev/nul
 For mounting the remote workspace through the local TCP tunnel, see
 [remote workspace setup and cleanup](docs/remote-workspace.md).
 
-Copy this workspace to the remote Ubuntu 24 machine. These files have not been pushed to the GitHub repository; cloning that repository alone will not retrieve this implementation.
+Clone [the repository](https://github.com/robintomar1/le_snail) on the remote Ubuntu 24 machine. Downloaded assets, run outputs and logs are not tracked; regenerate assets with `scripts/fetch_asset.py`.
 
 ```bash
 bash scripts/remote_preflight.sh
