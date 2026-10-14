@@ -50,7 +50,7 @@ try:
     physics_path = args.physics_override or args.bundle / 'sim.json'
     # Capture provenance before stepping; collaborators may edit shared files
     # while a long rendered evaluation is using its already-imported code.
-    runtime_hashes = {name: file_hash(name) for name in (__file__, 'src/le_snail/sim/env.py', 'src/le_snail/physics.py', 'src/le_snail/speed.py')}
+    runtime_hashes = {name: file_hash(name) for name in (__file__, 'src/le_snail/sim/env.py', 'src/le_snail/physics.py', 'src/le_snail/speed.py', 'src/le_snail/action_stats.py')}
     physics_override_configuration = json.loads(args.physics_override.read_text()) if args.physics_override else None
     runtime_physics_hash = file_hash(physics_path)
     cfg = make_config(args.asset, args.bundle / 'policy.json', physics_path, num_envs=1, stage=physics_stage, device=device, evaluation=True, seed=args.seed)
@@ -139,6 +139,8 @@ try:
             print(kind, index, trial.reason, flush=True)
     report = summarize(trials)
     report['speed_diagnostics'] = env.speed_diagnostics()
+    report['action_diagnostics'] = env.action_diagnostics()
+    report['runtime_source_hashes'] = runtime_hashes
     report.update({'seed': args.seed, 'camera': args.camera, 'probe_only': args.probe,
                    'physics_stage': physics_stage,
                    'probe_seconds': args.probe_seconds if args.probe else None,

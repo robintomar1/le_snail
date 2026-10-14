@@ -154,6 +154,8 @@ class SnailEnv(DirectRLEnv):
         self.nominal_coms = self.robot.root_physx_view.get_coms().clone()
         from le_snail.speed import PhysicsSpeedDiagnostics
         self.speed_monitor = PhysicsSpeedDiagnostics(self.num_envs, 6, self.physics_dt, self.device)
+        from le_snail.action_stats import ActionDiagnostics
+        self.action_monitor = ActionDiagnostics(self.num_envs, self.contract.joint_names, self.device)
         self._speed_sample_counter = self._sim_step_counter
         self.probes = []
         for probe in self.physics['protected_points']:
@@ -180,8 +182,10 @@ class SnailEnv(DirectRLEnv):
         if not torch.isfinite(actions).all():
             raise RuntimeError('Policy produced non-finite actions')
         self.old_target.copy_(self.target)
-        desired = torch.clamp(self.home + torch.clamp(actions, -1., 1.) * self.scale, self.lower, self.upper)
+        unclipped = self.home + torch.clamp(actions, -1., 1.) * self.scale
+        desired = torch.clamp(unclipped, self.lower, self.upper)
         self.target += torch.clamp(desired - self.target, -self.slew, self.slew)
+        self.action_monitor.update(actions, unclipped, desired, self.old_target, self.target, self.slew, self.lower, self.upper)
         self.command_queue[:, 1] = self.command_queue[:, 0]
         self.command_queue[:, 0] = self.target
         self.previous_x = self.robot.data.root_pos_w[:, 0].clone()
@@ -197,6 +201,9 @@ class SnailEnv(DirectRLEnv):
 
     def speed_diagnostics(self):
         return self.speed_monitor.report()
+
+    def action_diagnostics(self):
+        return self.action_monitor.report()
 
     def _apply_action(self):
         # DirectRLEnv increments this counter before applying each substep.

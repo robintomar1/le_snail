@@ -15,6 +15,14 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### D dataset rejected; W first50 complete and stopped for speed review
+
+- **No D training was launched.** `runs/demo-dataset-review-001/review.json` and `runs/demo-dataset-validation-001/validation.json` record the failed preregistered ambiguity gate. All four scripted paths passed both repeats and timing/history/slew/settling checks passed, but nearly identical actor24 observations can receive materially different next applied commands (initial variant choice and timed handoff). The near-neighbor criterion is conservative and also flags some same-frozen-policy pairs; this does not prove actor24 cannot learn recovery. No filtering workaround, threshold relaxation, hidden observation or PPO demonstration hook was introduced. Proposed next teacher redesign is **not authorized** by the old dataset-gated GO.
+- **W fresh seed101 pair completed50 new updates each**,2048 environments/arm, matching all21 initial policy tensors/normalizer buffers and all32 archived source files. Both finite/export parity checks pass. Full matched4200–4214 review: current range crawl1/5, wide0/5; both left/right0/5. These are freshly initialized policies; the older established shaped checkpoint still has its preserved5/5 v2 baseline. All30 new videos, per-joint action statistics and comparisons: `runs/action-range-review-seed101-050/comparison.json`.
+- Wide evaluation speed review flag is TRUE:737/73,520 over-cap environment-time samples = **1.00244831%**, above the agreed1% threshold. Peak6.327rad/s; longest driven-proxy streak0.025s (sustained flagfalse).432/748 over-cap joint samples have a positive PD sign proxy; this does not prove exploitation. Existing saved traces do not identify the exact trials/joints causing this cumulative flag. Both matched100 continuations and seed303 remain stopped; a diagnostic rerun needs a new coordinated decision. Do not round away or silently relax the threshold.
+- No D/W GPU processes remain; existing teleop/vla_sim untouched. W resume/source snapshot state: `.setup/action_range_worker_state.json`, review `resume-inputs.json`; use recorded frozen runtime for any authorized continuation. New wide contract/config preserves old policy/config files and all frozen checkpoints. New monitor is still polling/replying; latest laptop decision at this entry remains13:48:40 and does not override either stop gate.
+
+
 ### Physics-v2 gate complete; D/W authorized next
 
 - Phase P completed provisionally under the laptop coordinator's13:13:40 and13:28:56 decisions. Review/evidence index: `runs/physics-v2-review-001/review.json`. Validation passed84 tests+4subtests,47 mass/reset checks,77 inspection checks,smoke and allfour exact recovery scripts. Nominal mass0.682006kg includes a provisional50g base payload; hardware/contact/protected flags remainfalse.
