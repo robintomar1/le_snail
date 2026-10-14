@@ -15,6 +15,23 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Physics-v2 gate complete; D/W authorized next
+
+- Phase P completed provisionally under the laptop coordinator's13:13:40 and13:28:56 decisions. Review/evidence index: `runs/physics-v2-review-001/review.json`. Validation passed84 tests+4subtests,47 mass/reset checks,77 inspection checks,smoke and allfour exact recovery scripts. Nominal mass0.682006kg includes a provisional50g base payload; hardware/contact/protected flags remainfalse.
+- Production config is `configs/experiments/physics-v2-002.json`:1.5Nm,4rad/s configured joint velocity constraint,dt0.005,velocityiterations2. It is dynamically identical to001;002 adds provisional monitoring notes. Do not call4rad/s a strict actual-speed guarantee:200Hz traces show brief overshoots. Configured joint constraints can be exceeded during solver/contact interactions; PD sign is only a proxy, not proven physical back-drive. Per-run peak/time-fraction and sustained-driven-proxy diagnostics are implemented. Flags require review (>1% over-cap environment-time or sustained driven proxy).
+- Numerical checks complete:dt0.0025 reduces overspeed frequency but is explicitly not adopted for pilots. Velocityiterations8 increases over-cap fractions and fails the coordinator's adoption criterion. Keep002; no003 or hard velocity clamp. Short D/W hold is resolved; no further approval roundtrip is required within the recorded experiment scope.
+- Full matched v2 baseline4000–4014: current shaped crawl5/5,left0/5,right0/5;seed101crawl1/5,left0/5,right0/5. All30videos/traces retained. Four seed101crawl failures cross the lateral boundary. Use current shaped as the D common checkpoint; preserve seed101 for the independently freshW test. Prior v1evaluation seeds differ, so this is not a matched causal v1-v2 estimate.
+- Main is delegating D demonstration-data/matchedPPO pilot and W fresh current/wide action-range pairs; neither had launched at this entry. Standingmonitor coordinates routine authorized launches and reviews while main receives milestones. All source/evaluation provenance caveats are in review.json, including the baseline that began before instrumentation edits.
+
+
+### New GO: physics-v2 first, then demonstration and action-range experiments
+
+- Laptop relayed robin's explicit12:47:46 UTC approval for P physics-v2 (including per-link mass/inertia audit and provisional base payload), then D demonstration-assisted recovery pair and W matched fresh wider-action-range training. Read the full decision in `agents_communication.txt` before implementation. New experiment configs only; preserve all v1 candidates/configs and both frozen independent studies.
+- Servo identity is now user sticker-checked **12 V DC STS3215 on a12 V supply**; earlier7.4 V assumptions are superseded. Nominal proposed simulation limit1.5Nm/4rad/s; robust ranges0.98–2.94Nm and3–4.7rad/s. These are provisional datasheet-informed assumptions, not measured under-load limits. Actor24,20Hz and1rad/s target slew remain fixed; a wider-action contract is explicitly authorized forW only.
+- Empirical worker owns P implementation/validation. Required gates: source/imported mass/inertia audit, justified estimated base payload with unchanged measured=false flags, new settled starts/no passive reset progress, rebuilt image/smoke/inspection, four script-path feasibility replays, and full sequential v2 evaluation of current shaped and seed101 candidates on matched4000–4014. D/W cannot launch untilP passes. Newdev reservations: D4100/4120 blocks, Wseed1014200/4220 andfreshseed3034300/4320 blocks (15seeds each); qualification9000–9014 untouched.
+- A standing research agent actively monitors/replies to collaboration messages every25s without the earlier90-minute expiry. Its independent cursor and heartbeat are `.setup/communication-watch/gpu-research-cursor.json`; detachedtail remainsa logger. Main owns execution coordination and commits. Check liveagents/artifacts before duplicating work.
+
+
 ### Independent GPU reward study complete; reconcile before next experiment
 
 - `docs/research/reward-design-study-gpu.md` was frozen at12:15:03 UTC before reading the laptop study. SHA256 `be8496e40de714e43607bbd09a662c323d609cf465c0f7b349aa81f1764e2a24`. Two delegated agents handled primary-source/design and empirical work while main monitored coordination.
@@ -292,7 +309,7 @@ The SO-101 arm itself must crawl like an inchworm/snail. Use the stock printed b
 - Permanent power and USB tether, plus an accepted extra IMU USB connection. Model bounded dissipative drag at the cable attachment; full cable dynamics and snagging are deferred.
 - One feedforward PPO policy, six bounded joint-position targets, initial control rate **20 Hz**, physics **200 Hz**.
 - Actor observations: six joint offsets from home, six filtered finite-difference joint velocities, three base-frame gravity components, three gyro rates, six previous applied actions (**24 total**). Global position/velocity/contact truth is not a deployed policy input; position can measure reward and evaluation progress.
-- Existing arm is assembled/calibrated; user confirms **7.4 V Feetech servos**. Motor dynamics, sustained limits and body/gripper mappings still need physical measurement.
+- Existing arm is assembled/calibrated; the user sticker-checked **12 V DC STS3215 servos on a12 V supply** on2026-10-14, correcting the earlier7.4 V assumption. Motor dynamics, sustained limits and body/gripper mappings still need physical measurement.
 - Current IMU choice (supersedes the original BNO085/RP2040 plan): Xsens MTi-1s-DEV over native Xbus USB serial, as relayed by the laptop agent from the user on 2026-10-14. Base-frame gravity and gyro policy inputs remain unchanged; transport, mounting and physical validation are pending.
 - Physical policy execution belongs on the Ubuntu 22 laptop with RTX 4050; the training GPU is not in the live control loop.
 - Turning and 8×8 IR obstacle sensing remain later scope. Original two-day simulation/four-day hardware targets were feasibility targets, not achieved milestones or guarantees.

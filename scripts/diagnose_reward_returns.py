@@ -9,6 +9,8 @@ from isaaclab.app import AppLauncher
 
 p = argparse.ArgumentParser(description=__doc__)
 p.add_argument('--output', type=Path, required=True)
+p.add_argument('--capture-physics-steps', action='store_true', help='Read-only200Hz joint/drive/contact diagnostic; no changes to dynamics')
+p.add_argument('--solver-velocity-iterations', type=int, choices=range(1, 33), help='Diagnostic-only numerical override; never changes production config')
 p.add_argument('--modes', nargs='+', choices=('hold', 'script', 'deterministic', 'stochastic'), default=['hold', 'script', 'deterministic', 'stochastic'])
 p.add_argument('--asset', default='assets/so101/snail.urdf')
 p.add_argument('--contract', default='configs/policy.json')
@@ -34,11 +36,38 @@ try:
     seed, N, gamma = 4242, 64, .995
     source = json.loads(Path(args.confirmation).read_text())
     perturb = np.random.default_rng(seed).uniform(-.1, .1, (64, 3, 6))
-    env = SnailEnv(make_config(args.asset, args.contract, args.physics, num_envs=N,
-                              stage='recover', device=args.device or 'cuda:0',
-                              evaluation=True, initial_side='left', seed=seed))
+    class AuditEnv(SnailEnv):
+        capture_enabled = False
+        def _setup_scene(self):
+            super()._setup_scene()
+            if args.capture_physics_steps:
+                from isaaclab.sensors import ContactSensor, ContactSensorCfg
+                self.audit_contacts = ContactSensor(ContactSensorCfg(
+                    prim_path='/World/envs/env_.*/Robot/.*', update_period=0.))
+                self.scene.sensors['audit_contacts'] = self.audit_contacts
+        def _apply_action(self):
+            super()._apply_action()
+            if self.capture_enabled:
+                q = self.robot.data.joint_pos[:, self.joint_ids]
+                qd = self.robot.data.joint_vel[:, self.joint_ids]
+                pd = self.physics['stiffness_nm_rad'] * (self.applied_target-q) - self.physics['damping_nm_s_rad'] * qd
+                contacts = self.audit_contacts.data.net_forces_w.norm(dim=-1)
+                states = torch.cat((q, qd, self.applied_target, pd, contacts,
+                                    -self.robot.data.projected_gravity_b[:, 2:3],
+                                    self.audit_active[:, None], self.audit_script[:, None],
+                                    self.audit_accepted[:, None]), dim=1)
+                self.audit_rows.append(states.cpu().numpy())
+    cfg = make_config(args.asset, args.contract, args.physics, num_envs=N,
+                      stage='recover', device=args.device or 'cuda:0',
+                      evaluation=True, initial_side='left', seed=seed)
+    if args.capture_physics_steps:
+        cfg.robot_cfg.spawn.activate_contact_sensors = True
+    if args.solver_velocity_iterations is not None:
+        cfg.robot_cfg.spawn.articulation_props.solver_velocity_iteration_count = args.solver_velocity_iterations
+    env = AuditEnv(cfg)
     device, dt = env.device, env.step_dt
-    assert env.physics['effort_limit_nm'] == .8 and env.physics['velocity_limit_rad_s'] == 2.
+    assert torch.allclose(env.robot.data.joint_effort_limits, torch.full_like(env.robot.data.joint_effort_limits, env.physics['effort_limit_nm']))
+    assert torch.allclose(env.robot.data.joint_vel_limits, torch.full_like(env.robot.data.joint_vel_limits, env.physics['velocity_limit_rad_s']))
     runner = json.loads((Path(args.checkpoint).parent / 'run.json').read_text())['runner']
     pc = dict(runner['policy'])
     assert pc.pop('class_name') == 'ActorCritic'
@@ -47,11 +76,16 @@ try:
     net.eval()
     crawl = torch.jit.load(args.crawl_policy, map_location=device).eval()
     report = {'seed': seed, 'num_envs': N, 'gamma': gamma, 'dt': dt,
-              'physics_validated': False, 'training_performed': False, 'script_continuation_policy': args.crawl_policy,
+              'physics_validated': False, 'training_performed': False,
+              'numerical_settings': {'physics_dt': env.physics_dt, 'position_iterations': cfg.robot_cfg.spawn.articulation_props.solver_position_iteration_count, 'velocity_iterations': cfg.robot_cfg.spawn.articulation_props.solver_velocity_iteration_count},
+              'configured_effort_limit_nm': env.physics['effort_limit_nm'],
+              'configured_velocity_limit_rad_s': env.physics['velocity_limit_rad_s'], 'script_continuation_policy': args.crawl_policy,
               'provenance': {str(f): file_hash(f) for f in (args.asset, args.contract, args.physics, args.confirmation, args.checkpoint, args.crawl_policy, __file__, 'src/le_snail/sim/env.py')},
               'method': 'Original settled resets, two-second excluded home settling; same30s horizon; environment termination becomes absorbing zero reward, never includes auto-reset reward. Acceptance success does not stop reward collection. Scripted arm uses confirmed paths then the recorded continuation policy. Critic is shaped policy value; script/hold returns are off-policy diagnostics, not critic calibration targets.',
               'groups': []}
     def save():
+        report['speed_diagnostics'] = env.speed_diagnostics()
+        assert report['speed_diagnostics']['physics_steps'] == env._sim_step_counter
         (args.output / 'report.json').write_text(json.dumps(report, indent=2, allow_nan=False))
     with torch.no_grad():
         for side, variants in {'left': [9, 34], 'right': [48, 62]}.items():
@@ -67,6 +101,7 @@ try:
             keys = env.tensor(np.array([np.vstack((np.array(source['keys'][side]) + perturb[v], env.contract.home_rad)) for v in variant_ids]))
             for mode in args.modes:
                 env.cfg.initial_side = side
+                env.capture_enabled = False
                 obs, _ = env.reset(seed=seed)
                 for _ in range(round(2 / dt)):
                     obs, *_ = env.step(torch.zeros((N, 6), device=device))
@@ -82,9 +117,12 @@ try:
                 held = torch.zeros_like(key_i)
                 trials = [Trial(kind=side) for _ in range(N)]
                 rows, terms, actions_raw, deltas, values, masks = [], [], [], [], [], []
+                max_speed = torch.zeros(N, device=device)
+                max_effort = torch.zeros(N, device=device)
                 end_time = np.full(N, 30.)
                 script_end = np.full(N, np.nan)
                 ar = torch.arange(N, device=device)
+                env.audit_rows = []
                 for step in range(1, round(30 / dt) + 1):
                     before = env.target.clone()
                     value = net.evaluate(obs).flatten()
@@ -101,8 +139,16 @@ try:
                     desired = torch.clamp(env.home + actions.clamp(-1, 1) * env.scale, env.lower, env.upper)
                     intended_delta = (desired - before).clamp(-env.slew, env.slew)
                     live = active.clone()
+                    env.audit_active = live
+                    env.audit_script = (key_i <= 3) if mode == 'script' else torch.zeros_like(live)
+                    env.audit_accepted = torch.tensor([t.success for t in trials], device=device)
+                    env.capture_enabled = args.capture_physics_steps
                     obs, reward, terminated, truncated, _ = env.step(actions)
                     comps = torch.stack(list(env.reward_components.values()), dim=1)
+                    # Sampled after each20Hz control step; solver caps are separately
+                    # verified by the physics audit, not inferred from these peaks.
+                    max_speed = torch.maximum(max_speed, env.robot.data.joint_vel.abs().amax(dim=1) * live)
+                    max_effort = torch.maximum(max_effort, env.robot.data.applied_torque.abs().amax(dim=1) * live)
                     torch.testing.assert_close(comps.sum(dim=1), reward)
                     assert torch.isfinite(comps).all() and torch.isfinite(value).all()
                     if mode == 'script':
@@ -153,6 +199,8 @@ try:
                                       'recovery_time_s': trial.recovery_time_s, 'acceptance_end_s': trial.last_time_s,
                                       'environment_end_s': float(end_time[i]),
                                       'script_end_s': float(script_end[i]) if np.isfinite(script_end[i]) else None,
+                                      'max_sampled_joint_speed_rad_s': float(max_speed[i]),
+                                      'max_sampled_estimated_effort_nm': float(max_effort[i]),
                                       'initial_critic': float(initial_value[i]), 'initial_spent_shaping': float(initial_budget[i]),
                                       'max_upright': float(trace[live, i, 3].max()),
                                       'action_outside_unit_fraction': float((np.abs(raw[live, i]) > 1).mean()),
@@ -163,6 +211,15 @@ try:
                          'successes': sum(t.success for t in trials),
                          'recovered': sum(t.recovery_time_s is not None for t in trials)}
                 report['groups'].append(group)
+                env.capture_enabled = False
+                if args.capture_physics_steps:
+                    group['physics_trace_columns'] = {'joint_position': [0, 6], 'joint_velocity': [6, 12],
+                                                      'applied_target': [12, 18], 'unclipped_pd_estimate': [18, 24],
+                                                      'body_contact_force_norm': [24, 24+env.robot.num_bodies],
+                                                      'upright_active_script_accepted': [24+env.robot.num_bodies, 28+env.robot.num_bodies]}
+                    group['physics_dt'] = env.physics_dt
+                    group['contact_body_names'] = env.audit_contacts.body_names
+                    np.savez_compressed(args.output / f'{side}-{mode}-physics.npz', samples=np.asarray(env.audit_rows))
                 np.savez_compressed(args.output / f'{side}-{mode}.npz', components=rewards, state=trace, raw_action=raw, intended_target_delta=delta, critic=value_trace, active=mask)
                 save()
                 print(json.dumps({'side': side, 'mode': mode, 'successes': group['successes'], 'recovered': group['recovered'], 'mean_discounted30': float(np.mean([s['prefix_returns']['30.0']['discounted_total'] for s in summaries])), 'mean_critic': float(initial_value.mean())}), flush=True)

@@ -46,3 +46,36 @@ def test_invalid_experimental_reset_or_gate_is_rejected(tmp_path, change):
     path.write_text(json.dumps(config))
     with pytest.raises(ValueError):
         load_physics(path)
+
+
+@pytest.mark.parametrize('change', ['negative_payload', 'nonfinite_center', 'bad_box', 'missing_measured', 'bad_effort', 'bad_velocity'])
+def test_invalid_payload_or_limit_interval(tmp_path, change):
+    config = json.loads((Path(__file__).resolve().parents[1] / 'configs/experiments/physics-v2-bootstrap-001.json').read_text())
+    if change == 'negative_payload':
+        config['base_payload']['mass_kg'] = -1.
+    elif change == 'nonfinite_center':
+        config['base_payload']['center_m'][0] = float('nan')
+    elif change == 'bad_box':
+        config['base_payload']['box_size_m'][0] = 0.
+    elif change == 'missing_measured':
+        del config['base_payload']['measured']
+    elif change == 'bad_effort':
+        config['effort_limit_range_nm'] = [1.6, 2.9]
+    else:
+        config['velocity_limit_range_rad_s'] = [5., 3.]
+    path = tmp_path / 'physics.json'
+    path.write_text(json.dumps(config))
+    with pytest.raises(ValueError):
+        load_physics(path)
+
+
+def test_payload_combination_preserves_origin_inertia_and_symmetry():
+    import numpy as np
+    from le_snail.physics import combine_box_payload
+    mass, com, inertia = combine_box_payload(2., [0., 0., 0.], np.diag([1., 2., 3.]),
+                                           {'mass_kg': 1., 'center_m': [3., 0., 0.], 'box_size_m': [2., 2., 2.]})
+    assert mass == 3.
+    np.testing.assert_allclose(com, [1., 0., 0.])
+    np.testing.assert_allclose(inertia, np.diag([1.+2/3, 8.+2/3, 9.+2/3]))
+    np.testing.assert_allclose(inertia + mass*(np.dot(com, com)*np.eye(3)-np.outer(com, com)),
+                               np.diag([1.+2/3, 11.+2/3, 12.+2/3]))

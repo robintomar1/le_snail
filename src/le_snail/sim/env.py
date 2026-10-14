@@ -17,7 +17,7 @@ from isaaclab.utils.math import quat_apply, quat_apply_inverse
 
 from le_snail.contract import PolicyContract
 from le_snail.bundle import file_hash
-from le_snail.physics import load_physics
+from le_snail.physics import combine_box_payload, load_physics
 
 
 @configclass
@@ -133,6 +133,28 @@ class SnailEnv(DirectRLEnv):
         self.base_indices_wp = wp.array(self.base_ids, dtype=wp.int32, device=self.device)
         self.nominal_masses = self.robot.root_physx_view.get_masses().clone()
         self.nominal_inertias = self.robot.root_physx_view.get_inertias().clone()
+        self.imported_masses = self.nominal_masses.clone()
+        self.imported_inertias = self.nominal_inertias.clone()
+        self.imported_coms = self.robot.root_physx_view.get_coms().clone()
+        if 'base_payload' in self.physics:
+            body = self.base_ids[0]
+            mass, center, inertia = combine_box_payload(
+                float(self.nominal_masses[0, body]), self.imported_coms[0, body, :3].numpy(),
+                self.nominal_inertias[0, body].numpy(), self.physics['base_payload'])
+            self.nominal_masses[:, body] = mass
+            self.nominal_inertias[:, body] = torch.as_tensor(inertia.reshape(9), dtype=self.nominal_inertias.dtype)
+            coms = self.imported_coms.clone()
+            coms[:, body, :3] = torch.as_tensor(center, dtype=coms.dtype)
+            ids = self.robot._ALL_INDICES.cpu()
+            # COM pose first; set_inertias then diagonalizes the full link-frame
+            # COM tensor. Cache the combined nominal properties only once.
+            self.robot.root_physx_view.set_masses(self.nominal_masses, ids)
+            self.robot.root_physx_view.set_coms(coms, ids)
+            self.robot.root_physx_view.set_inertias(self.nominal_inertias, ids)
+        self.nominal_coms = self.robot.root_physx_view.get_coms().clone()
+        from le_snail.speed import PhysicsSpeedDiagnostics
+        self.speed_monitor = PhysicsSpeedDiagnostics(self.num_envs, 6, self.physics_dt, self.device)
+        self._speed_sample_counter = self._sim_step_counter
         self.probes = []
         for probe in self.physics['protected_points']:
             ids, _ = self.robot.find_bodies(probe['body'])
@@ -164,7 +186,22 @@ class SnailEnv(DirectRLEnv):
         self.command_queue[:, 0] = self.target
         self.previous_x = self.robot.data.root_pos_w[:, 0].clone()
 
+    def _record_speed(self, completed_step):
+        if completed_step <= self._speed_sample_counter:
+            return
+        q = self.robot.data.joint_pos[:, self.joint_ids]
+        qd = self.robot.data.joint_vel[:, self.joint_ids]
+        pd = self.physics['stiffness_nm_rad'] * (self.applied_target - q) - self.physics['damping_nm_s_rad'] * qd
+        self.speed_monitor.update(qd, self.robot.data.joint_vel_limits[:, self.joint_ids], pd)
+        self._speed_sample_counter = completed_step
+
+    def speed_diagnostics(self):
+        return self.speed_monitor.report()
+
     def _apply_action(self):
+        # DirectRLEnv increments this counter before applying each substep.
+        # Read the previous completed substep before replacing its target.
+        self._record_speed(self._sim_step_counter - 1)
         delayed = self.command_queue[torch.arange(self.num_envs, device=self.device), self.delay_steps]
         self.applied_target.copy_(delayed)
         self.robot.set_joint_position_target(delayed, joint_ids=self.joint_ids)
@@ -257,6 +294,8 @@ class SnailEnv(DirectRLEnv):
         return torch.atan2(2*(w*z + x*y), 1-2*(y*y + z*z))
 
     def _get_dones(self):
+        # Capture the final substep before any environment is autoreset.
+        self._record_speed(self._sim_step_counter)
         self.last_transition = (self.robot.data.root_pos_w.clone(), self.robot.data.projected_gravity_b.clone(), self.protected_contact().clone())
         self.last_transition_quat = self.robot.data.root_quat_w.clone()
         displacement = self.robot.data.root_pos_w - self.start_pos
@@ -310,6 +349,7 @@ class SnailEnv(DirectRLEnv):
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
         super()._reset_idx(env_ids)
+        self.speed_monitor.reset_envs(env_ids)
         n = len(env_ids)
         state = self.robot.data.default_root_state[env_ids].clone()
         state[:, :3] += self.scene.env_origins[env_ids]
@@ -383,6 +423,15 @@ class SnailEnv(DirectRLEnv):
         inertias[ids_cpu] *= scales[:, None, None]
         self.robot.root_physx_view.set_masses(masses, ids_cpu)
         self.robot.root_physx_view.set_inertias(inertias, ids_cpu)
+        for range_key, nominal_key, writer, actuator_field in (
+                ('effort_limit_range_nm', 'effort_limit_nm', self.robot.write_joint_effort_limit_to_sim, 'effort_limit'),
+                ('velocity_limit_range_rad_s', 'velocity_limit_rad_s', self.robot.write_joint_velocity_limit_to_sim, 'velocity_limit')):
+            if range_key in self.physics:
+                limits = uniform(self.physics[range_key]) if robust else torch.full((n,), self.physics[nominal_key], device=self.device)
+                writer(limits[:, None].expand(n, 6), joint_ids=self.joint_ids, env_ids=env_ids)
+                # Implicit drive physics uses the solver limit; keep its torque
+                # estimate/metadata synchronized with the same randomized cap.
+                getattr(self.robot.actuators['servos'], actuator_field)[env_ids] = limits[:, None]
         gains = uniform(self.physics['gain_scale_range']) if robust else torch.ones(n, device=self.device)
         self.robot.write_joint_stiffness_to_sim((gains[:, None] * self.physics['stiffness_nm_rad']).expand(n, 6), joint_ids=self.joint_ids, env_ids=env_ids)
         self.robot.write_joint_damping_to_sim((gains[:, None] * self.physics['damping_nm_s_rad']).expand(n, 6), joint_ids=self.joint_ids, env_ids=env_ids)

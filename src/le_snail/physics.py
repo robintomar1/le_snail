@@ -21,6 +21,25 @@ def load_physics(path):
             raise ValueError(f'{key} must be a nonnegative ordered interval')
         if key in ('mass_scale_range', 'gain_scale_range') and values[0] <= 0:
             raise ValueError(f'{key} must be positive')
+    for key, nominal in (('effort_limit_range_nm', 'effort_limit_nm'),
+                         ('velocity_limit_range_rad_s', 'velocity_limit_rad_s')):
+        if key in config:
+            bounds = config[key]
+            if (len(bounds) != 2 or not all(math.isfinite(v) and v > 0 for v in bounds)
+                    or not bounds[0] <= config[nominal] <= bounds[1]):
+                raise ValueError(f'{key} must be positive, ordered and contain its nominal value')
+    if 'base_payload' in config:
+        payload = config['base_payload']
+        if type(payload.get('measured')) is not bool:
+            raise ValueError('Payload requires explicit measured boolean')
+        if not math.isfinite(payload['mass_kg']) or payload['mass_kg'] < 0:
+            raise ValueError('Payload mass must be finite and nonnegative')
+        for key in ('center_m', 'box_size_m'):
+            values = payload[key]
+            if len(values) != 3 or not all(math.isfinite(v) for v in values):
+                raise ValueError(f'Payload {key} requires three finite values')
+        if any(v <= 0 for v in payload['box_size_m']):
+            raise ValueError('Payload box dimensions must be positive')
     for key in ('position_noise_std_rad', 'gyro_noise_std_rad_s', 'gravity_noise_std'):
         if not math.isfinite(config[key]) or config[key] < 0:
             raise ValueError(f'{key} must be finite and nonnegative')
@@ -67,3 +86,23 @@ def load_physics(path):
                 if 1 - 2 * (x*x + y*y) >= .5:
                     raise ValueError('Side upright progress shaping requires genuinely fallen side starts')
     return config
+
+
+def combine_box_payload(mass, center, inertia, payload):
+    """Combine a link and a uniform box using the parallel-axis theorem.
+
+    Both centers and COM inertia matrices use the same link frame. The added
+    box axes follow that frame. Returns combined mass, COM and COM inertia.
+    This is a mass approximation, not added collision geometry.
+    """
+    import numpy as np
+    center, inertia = np.asarray(center, dtype=float), np.asarray(inertia, dtype=float).reshape(3, 3)
+    added = payload['mass_kg']
+    total = mass + added
+    location = np.asarray(payload['center_m'], dtype=float)
+    combined = (mass * center + added * location) / total
+    size = np.asarray(payload['box_size_m'], dtype=float)
+    box_inertia = np.diag(added / 12. * (np.sum(size * size) - size * size))
+    def shift(amount, offset):
+        return amount * (np.dot(offset, offset) * np.eye(3) - np.outer(offset, offset))
+    return total, combined, inertia + box_inertia + shift(mass, center-combined) + shift(added, location-combined)

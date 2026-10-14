@@ -9,6 +9,7 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--bundle', type=Path, required=True)
 parser.add_argument('--asset', default='assets/so101/snail.urdf')
+parser.add_argument('--physics-override', type=Path, help='Explicit diagnostic domain-shift evaluation; preserves original bundle and cannot qualify a milestone')
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--seed', type=int, default=1000)
 parser.add_argument('--video', action='store_true')
@@ -33,7 +34,7 @@ import json
 import math
 import numpy as np
 import torch
-from le_snail.bundle import load_bundle
+from le_snail.bundle import file_hash, load_bundle
 from le_snail.evaluation import Trial, summarize
 from le_snail.sim.env import SnailEnv, make_config
 
@@ -46,7 +47,13 @@ try:
     args.output.mkdir(parents=True)
     device = args.device or 'cuda:0'
     physics_stage = 'crawl' if args.nominal_probe else 'robust'
-    cfg = make_config(args.asset, args.bundle / 'policy.json', args.bundle / 'sim.json', num_envs=1, stage=physics_stage, device=device, evaluation=True, seed=args.seed)
+    physics_path = args.physics_override or args.bundle / 'sim.json'
+    # Capture provenance before stepping; collaborators may edit shared files
+    # while a long rendered evaluation is using its already-imported code.
+    runtime_hashes = {name: file_hash(name) for name in (__file__, 'src/le_snail/sim/env.py', 'src/le_snail/physics.py', 'src/le_snail/speed.py')}
+    physics_override_configuration = json.loads(args.physics_override.read_text()) if args.physics_override else None
+    runtime_physics_hash = file_hash(physics_path)
+    cfg = make_config(args.asset, args.bundle / 'policy.json', physics_path, num_envs=1, stage=physics_stage, device=device, evaluation=True, seed=args.seed)
     cfg.viewer.resolution = (960, 720)
     env = SnailEnv(cfg, render_mode='rgb_array' if args.video else None)
     policy = torch.jit.load(str(args.bundle / 'policy.pt'), map_location=device).eval()
@@ -131,11 +138,22 @@ try:
             trials.append(trial)
             print(kind, index, trial.reason, flush=True)
     report = summarize(trials)
+    report['speed_diagnostics'] = env.speed_diagnostics()
     report.update({'seed': args.seed, 'camera': args.camera, 'probe_only': args.probe,
                    'physics_stage': physics_stage,
                    'probe_seconds': args.probe_seconds if args.probe else None,
                    'bundle_manifest': manifest, 'trials': [asdict(t) for t in trials], 'physics_validated': manifest['physics_validated']})
-    report['milestone_candidate'] = not args.probe and report['passed'] and manifest['physics_validated'] and manifest['stage'] == 'robust'
+    report['physics_override'] = ({'path': str(args.physics_override), 'sha256': runtime_physics_hash,
+                                   'original_bundle_physics_sha256': file_hash(args.bundle / 'sim.json'),
+                                   'configuration': physics_override_configuration,
+                                   'diagnostic_only': True,
+                                   'evaluation_script_sha256': runtime_hashes[__file__],
+                                   'environment_sha256': runtime_hashes['src/le_snail/sim/env.py'],
+                                   'physics_validation_sha256': runtime_hashes['src/le_snail/physics.py'],
+                                   'speed_diagnostics_sha256': runtime_hashes['src/le_snail/speed.py']} if args.physics_override else None)
+    if args.physics_override:
+        report['physics_validated'] = False
+    report['milestone_candidate'] = not args.physics_override and not args.probe and report['passed'] and manifest['physics_validated'] and manifest['stage'] == 'robust'
     report['milestone_passed'] = False  # Video/contact review must also confirm an acceptable gait.
     report['visual_gait_review_required'] = True
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')

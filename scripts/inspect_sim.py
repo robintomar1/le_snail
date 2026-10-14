@@ -373,6 +373,14 @@ try:
                 'force_world_n': array(force).tolist(), 'torque_world_nm': array(torque).tolist(),
                 'power_w': array(power).tolist(), 'moment_error_nm': float(moment_error)})
 
+    check('solver_effort_limit_matches_config', np.allclose(
+        array(env.robot.root_physx_view.get_dof_max_forces()), env.physics['effort_limit_nm']))
+    check('solver_velocity_limit_matches_config', np.allclose(
+        array(env.robot.root_physx_view.get_dof_max_velocities()), env.physics['velocity_limit_rad_s']))
+    report['mass_model'] = {'imported_masses_kg': array(env.imported_masses[0]).tolist(),
+                            'nominal_masses_kg': array(env.nominal_masses[0]).tolist(),
+                            'nominal_coms_xyzw': array(env.nominal_coms[0]).tolist(),
+                            'base_payload': env.physics.get('base_payload')}
     report['robot'] = {'fixed_base': env.robot.is_fixed_base, 'joint_names': env.robot.joint_names,
         'body_names': env.robot.body_names, 'contact_body_names': env.contacts.body_names,
         'masses_kg': array(env.robot.root_physx_view.get_masses()).tolist(),
@@ -505,6 +513,10 @@ try:
                 'max_all_joint_speed_rad_s': max_speed, 'max_estimated_drive_effort_nm': max_effort,
                 'max_target_slew_rad_s': max_slew}
             (args.output / f'joint-{name}.json').write_text(json.dumps(records, indent=2) + '\n')
+            check(f'joint_speed_limit_{name}', max_speed <= env.physics['velocity_limit_rad_s'] + 1e-3,
+                  max_joint_speed_rad_s=max_speed)
+            check(f'estimated_drive_effort_limit_{name}', max_effort <= env.physics['effort_limit_nm'] + 1e-5,
+                  max_estimated_drive_effort_nm=max_effort)
             check(f'target_slew_{name}', max_slew <= max(env.contract.max_target_speed_rad_s) + 1e-4,
                   max_target_speed_rad_s=max_slew)
 
