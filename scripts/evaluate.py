@@ -12,6 +12,7 @@ parser.add_argument('--asset', default='assets/so101/snail.urdf')
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--seed', type=int, default=1000)
 parser.add_argument('--video', action='store_true')
+parser.add_argument('--probe', action='store_true', help='One five-second trial per start for pipeline diagnostics; cannot qualify a milestone')
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 if args.output.exists():
@@ -42,7 +43,7 @@ try:
     trials = []
     for kind in ('crawl', 'left', 'right'):
         env.cfg.initial_side = 'upright' if kind == 'crawl' else kind
-        for index in range(5):
+        for index in range(1 if args.probe else 5):
             seed = args.seed + len(trials)
             obs, _ = env.reset(seed=seed)
             # Let gravity settle the start pose; these seconds are not scored as locomotion.
@@ -61,10 +62,13 @@ try:
             if args.video:
                 import imageio.v2 as imageio
                 writer = imageio.get_writer(str(args.output / f'{kind}-{index}.mp4'), fps=round(contract.policy_hz))
-            with trace_path.open('w') as trace, torch.inference_mode():
+            # Simulator caches survive this scope and are mutated by the next
+            # reset; inference tensors would reject that later in-place update.
+            with trace_path.open('w') as trace, torch.no_grad():
                 upright = float(-env.robot.data.projected_gravity_b[0, 2])
                 trial.update(0., 0., 0., upright, fault=settling_fault)
-                for step in range(1, round(trial.timeout_s / contract.dt) + 1):
+                duration = min(5., trial.timeout_s) if args.probe else trial.timeout_s
+                for step in range(1, round(duration / contract.dt) + 1):
                     if trial.finished:
                         break
                     actions = policy(obs['policy'])
@@ -82,18 +86,18 @@ try:
                     if bool(trunc[0]) and not trial.finished:
                         trial.finished, trial.reason = True, 'simulation_timeout'
                 if not trial.finished:
-                    trial.finished, trial.reason = True, 'timeout'
+                    trial.finished, trial.reason = True, 'probe_limit' if args.probe else 'timeout'
             if writer is not None:
                 writer.close()
+                writer = None
             trials.append(trial)
             print(kind, index, trial.reason, flush=True)
     report = summarize(trials)
-    report.update({'seed': args.seed, 'bundle_manifest': manifest, 'trials': [asdict(t) for t in trials], 'physics_validated': manifest['physics_validated']})
-    report['milestone_candidate'] = report['passed'] and manifest['physics_validated'] and manifest['stage'] == 'robust'
+    report.update({'seed': args.seed, 'probe_only': args.probe, 'bundle_manifest': manifest, 'trials': [asdict(t) for t in trials], 'physics_validated': manifest['physics_validated']})
+    report['milestone_candidate'] = not args.probe and report['passed'] and manifest['physics_validated'] and manifest['stage'] == 'robust'
     report['milestone_passed'] = False  # Video/contact review must also confirm an acceptable gait.
     report['visual_gait_review_required'] = True
     (args.output / 'report.json').write_text(json.dumps(report, indent=2) + '\n')
-    env.close()
     print(json.dumps(report, indent=2), flush=True)
 except BaseException:
     traceback.print_exc()
@@ -101,6 +105,11 @@ except BaseException:
     omni.kit.app.get_app().post_quit(1)
     raise
 finally:
+    # Release render products even when a trial fails before normal completion.
+    if 'writer' in globals() and writer is not None:
+        writer.close()
+    if 'env' in globals():
+        env.close()
     sys.stdout.flush()
     sys.stderr.flush()
     app.close()

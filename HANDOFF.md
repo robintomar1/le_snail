@@ -15,6 +15,22 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Phase 2 pipeline executed: 2026-10-14
+
+- Final rendered regression: **25 checks passed**, exit 0 (`visual-regression/`), including the terminal-render and deadline paths. Portable suite remains **51 tests and 4 subtests passed** (`portable-phase2.log`).
+
+- The capped crawl run completed: `runs/crawl-probe-001`, 64 environments, 20 iterations, seed 42, 81,920 transitions, exit 0. Checkpoint and exported bundle exist; source/config/asset snapshots are retained. `export-parity.json` records 512 actual rollout observations with maximum CPU-export/CUDA-inference action difference **8.345e-7** (float32 tolerance 1e-5).
+- One-iteration checkpoint resume completed at `runs/crawl-resume-probe-001`, exit 0; lineage SHA-256 matches the original checkpoint and another 512-sample export check passes (maximum error **7.153e-7**).
+- Rendered exported evaluation passes execution across crawl/left/right: `runs/evaluation-probe-002`, seed 2000, one five-second diagnostic per start, exit 0. New `--probe` mode keeps acceptance thresholds and cannot qualify incomplete groups. Default evaluation still runs all fifteen full-duration trials. These are development seeds, not held-out qualification.
+- **No crawling or recovery milestone achieved.** Five-second net forward displacement is 13.0 / 9.0 / 9.9 cm, but final upright cosine is -0.684 / -0.009 / -0.021: all fallen. Contact sheets and videos were reviewed; movement is not sufficient evidence of acceptable crawling.
+- Fixed a real evaluator bug exposed on the second trial: Isaac caches created under `torch.inference_mode()` could not be mutated by a subsequent reset outside that scope. `torch.no_grad()` preserves gradient-free inference and mutable simulator state. Failed `evaluation-probe-001` is retained; it needed a forced stop after the exception (exit 137). Environment/video cleanup now runs on failure too. A deliberately malformed five-action export fails visibly with exit 1 after environment creation. Missing-asset training and missing-bundle evaluation also return 1 with tracebacks.
+- Laptop agent reports preliminary replay passed: 200 synthetic static-home samples, finite outputs within joint/slew limits. This is synthetic evidence, not real sensor/actuator timing or hardware readiness.
+- Laptop agent relayed the user's updated hardware choice: **Xsens MTi-1s-DEV with native Xbus USB serial**, replacing the earlier BNO085/RP2040 plan. The observation contract is unchanged. Laptop owns transport and sensor documentation updates (#11); old calibration is unverified and must be preserved. Simulation noise/mass/drag remain provisional until measured.
+- Source is now a Git repository; laptop imported/pushed baseline `1bc9c56`. GPU commits only its owned files locally; laptop handles pushes/tracking. Continue append-only coordination; do not commit local communication, original notes, assets, experiment outputs or credentials.
+- Next GPU work: Phase 3 (#6), first resolve/review airborne reset settling and reward effects, contact support and posture margin. Record a bounded experiment before increasing training. Physics/protected-point measurements and acceptable gait remain open; no physical motion is enabled by these exports.
+- Evidence logs and inspection report: `runs/inspection-20261014T075415Z/`. The runtime image remains the Phase 1 rebuild below; evaluation fixes run from the bind-mounted source and will be included in the next image rebuild.
+
+
 ### Phase 1 complete; Phase 2 execution probe starting: 2026-10-14
 
 - Continuation plan: `docs/le-snail-forward-spec.md`. Coordination with the laptop agent is append-only in `agents_communication.txt`; GPU owns simulation/training, laptop owns deployment and GitHub tracking. Issues #1–#10 were created by the laptop agent; #3 is inspection, #4 applied-action correction, #5 pipeline probe.
@@ -141,7 +157,7 @@ The SO-101 arm itself must crawl like an inchworm/snail. Use the stock printed b
 - One feedforward PPO policy, six bounded joint-position targets, initial control rate **20 Hz**, physics **200 Hz**.
 - Actor observations: six joint offsets from home, six filtered finite-difference joint velocities, three base-frame gravity components, three gyro rates, six previous applied actions (**24 total**). Global position/velocity/contact truth is not a deployed policy input; position can measure reward and evaluation progress.
 - Existing arm is assembled/calibrated; user confirms **7.4 V Feetech servos**. Motor dynamics, sustained limits and body/gripper mappings still need physical measurement.
-- Selected IMU direction: BNO085/BNO086 plus RP2040 USB bridge, base-mounted; magnetometer-free Game Rotation Vector and gyro. Acquisition, flashing, mounting and validation are still pending.
+- Current IMU choice (supersedes the original BNO085/RP2040 plan): Xsens MTi-1s-DEV over native Xbus USB serial, as relayed by the laptop agent from the user on 2026-10-14. Base-frame gravity and gyro policy inputs remain unchanged; transport, mounting and physical validation are pending.
 - Physical policy execution belongs on the Ubuntu 22 laptop with RTX 4050; the training GPU is not in the live control loop.
 - Turning and 8×8 IR obstacle sensing remain later scope. Original two-day simulation/four-day hardware targets were feasibility targets, not achieved milestones or guarantees.
 
