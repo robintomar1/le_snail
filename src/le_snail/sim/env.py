@@ -118,6 +118,12 @@ class SnailEnv(DirectRLEnv):
         self.start_yaw = torch.zeros(self.num_envs, device=self.device)
         self.previous_x = self.start_pos[:, 0].clone()
         self.fallen_time = torch.zeros(self.num_envs, device=self.device)
+        # Training diagnostics only; never part of observations or rewards.
+        self.initial_side = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.stable_upright_steps = torch.zeros_like(self.initial_side)
+        self.reached_upright = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        # Rows: left/right. Columns documented by recovery_diagnostics().
+        self.side_episode_counts = torch.zeros((2, 6), dtype=torch.long, device=self.device)
         self.drag = torch.zeros(self.num_envs, device=self.device)
         self.gravity_w = self.tensor([0., 0., -1.]).repeat(self.num_envs, 1)
         self.base_indices_wp = wp.array(self.base_ids, dtype=wp.int32, device=self.device)
@@ -243,15 +249,41 @@ class SnailEnv(DirectRLEnv):
         invalid = ~torch.isfinite(self.robot.data.root_state_w).all(dim=1)
         invalid |= ~torch.isfinite(self.robot.data.joint_pos).all(dim=1)
         terminated = invalid | self.protected_contact() | (displacement[:, 1].abs() > 0.15) | (self.robot.data.root_pos_w[:, 2] < -0.03)
-        terminated |= self.fallen_time > self.physics['max_fallen_time_s']
+        fallen_timeout = self.fallen_time > self.physics['max_fallen_time_s']
+        terminated |= fallen_timeout
         # DirectRLEnv increments the counter before calling _get_dones.
         timeout = self.episode_length_buf >= self.max_episode_length
+        self.stable_upright_steps = torch.where(upright >= .8, self.stable_upright_steps + 1, 0)
+        # Eleven samples at20Hz span0.5s from the first qualifying sample.
+        stable = self.stable_upright_steps >= round(.5 / self.step_dt) + 1
+        first_upright = stable & ~self.reached_upright
+        self.reached_upright |= stable
+        ended = terminated | timeout
+        side = torch.stack((self.initial_side == 1, self.initial_side == 2), dim=1)
+        events = torch.stack((ended, first_upright, ended & self.reached_upright,
+                              ended & fallen_timeout, ended & fallen_timeout & self.reached_upright), dim=1)
+        self.side_episode_counts[:, 1:] += (side[:, :, None] & events[:, None, :]).sum(dim=0)
         if self.render_mode == 'rgb_array' and bool((terminated | timeout).any()):
             # Capture before DirectRLEnv auto-resets so evaluation videos retain
             # the same terminal transition used by the acceptance scorer.
             self.terminal_frame = self.render().copy()
         # Ordinary falls do not terminate episodes. Evaluation ends on its independent acceptance checks.
         return terminated, timeout
+
+    def recovery_diagnostics(self):
+        """Per-run side-start counters, including endings before automatic reset."""
+        names = ('started', 'completed', 'reached_stable_upright', 'completed_after_stable_upright',
+                 'completed_at_fallen_limit', 'completed_after_upright_and_at_fallen_limit')
+        result = {'stable_definition': 'upright cosine >=0.8 continuously for0.5s',
+                  'scope': 'side-start episodes in this environment lifetime; incomplete episodes excluded from fractions',
+                  'sides': {}}
+        for side, values in zip(('left', 'right'), self.side_episode_counts.cpu().tolist()):
+            row = dict(zip(names, values))
+            denominator = row['completed']
+            row['completed_upright_fraction'] = row['completed_after_stable_upright'] / denominator if denominator else None
+            row['completed_fallen_limit_fraction'] = row['completed_at_fallen_limit'] / denominator if denominator else None
+            result['sides'][side] = row
+        return result
 
     def _reset_idx(self, env_ids):
         if env_ids is None:
@@ -298,6 +330,11 @@ class SnailEnv(DirectRLEnv):
         self.start_yaw[env_ids] = self.yaw(state[:, 3:7])
         self.previous_x[env_ids] = state[:, 0]
         self.fallen_time[env_ids] = 0.
+        self.initial_side[env_ids] = torch.where(roll > .1, 1, torch.where(roll < -.1, 2, 0))
+        self.stable_upright_steps[env_ids] = 0
+        self.reached_upright[env_ids] = False
+        self.side_episode_counts[:, 0] += torch.stack(((self.initial_side[env_ids] == 1).sum(),
+                                                      (self.initial_side[env_ids] == 2).sum()))
         self.observation_step = -1
         self._randomize(env_ids)
 

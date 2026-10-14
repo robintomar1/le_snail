@@ -16,6 +16,7 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--asset', default='assets/so101/snail.urdf')
 parser.add_argument('--contract', default='configs/policy.json')
 parser.add_argument('--physics', default='configs/sim.json')
+parser.add_argument('--stage', choices=['crawl', 'recover'], default='crawl')
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--checks-only', action='store_true')
 AppLauncher.add_app_launcher_args(parser)
@@ -45,7 +46,7 @@ try:
             self.scene.sensors['inspection_contacts'] = self.contacts
 
     cfg = make_config(args.asset, args.contract, args.physics, num_envs=2,
-                      stage='crawl', evaluation=True, device=args.device or 'cuda:0')
+                      stage=args.stage, evaluation=True, device=args.device or 'cuda:0')
     cfg.robot_cfg.spawn.activate_contact_sensors = True
     cfg.viewer.resolution = (960, 720)
     env = InspectionEnv(cfg, render_mode=None if args.checks_only else 'rgb_array')
@@ -140,6 +141,9 @@ try:
                 array(env.robot.data.root_link_pose_w[0])[:3] - array(env.scene.env_origins[0]),
                 rest['root_pose'][:3], atol=1e-6) and np.allclose(
                 array(env.robot.data.joint_pos[0, env.joint_ids]), rest['joint_rad'], atol=1e-6))
+            upright = -env.robot.data.projected_gravity_b[:, 2]
+            posture_ok = (upright > .8).all() if side == 'upright' else (upright < .2).all()
+            check(f'settled_posture_{side}', bool(posture_ok), upright_cos=array(upright).tolist())
             start = env.robot.data.root_pos_w.clone()
             total = torch.zeros(env.num_envs, device=env.device)
             fault = False
@@ -152,6 +156,64 @@ try:
                   max_drift_m=drift, max_reward=float(total.max()))
         check('reward_components_logged', 'Reward/progress' in env.extras.get('log', {}) and
               'Reward/gated_out_progress' in env.extras.get('log', {}))
+        if args.stage == 'recover':
+            counts = {'upright': 0, 'left': 0, 'right': 0}
+            matched = True
+            env.cfg.evaluation = False
+            try:
+                for seed in range(7000, 7256):
+                    env.reset(seed=seed)
+                    poses = array(env.robot.data.root_link_pose_w).copy()
+                    poses[:, :3] -= array(env.scene.env_origins)
+                    joints = array(env.robot.data.joint_pos[:, env.joint_ids])
+                    for pose, q in zip(poses, joints):
+                        sides = [side for side, rest in env.physics['settled_starts'].items()
+                                 if np.allclose(pose, rest['root_pose'], atol=1e-6) and
+                                 np.allclose(q, rest['joint_rad'], atol=1e-6)]
+                        matched &= len(sides) == 1
+                        if len(sides) == 1:
+                            counts[sides[0]] += 1
+                fraction = (counts['left'] + counts['right']) / (256 * env.num_envs)
+                expected = env.physics['recovery_start_fraction']
+                check('recovery_reset_distribution', matched and all(counts.values()) and
+                      abs(fraction - expected) < .1, counts=counts,
+                      fallen_fraction=fraction, configured_fraction=expected)
+            finally:
+                env.cfg.evaluation = True
+            # Exercise episode accounting across real steps and automatic resets.
+            env.cfg.initial_side = 'left'
+            env.reset(seed=7)
+            before = env.side_episode_counts.clone()
+            rest = env.physics['settled_starts']['upright']
+            pose = env.tensor(rest['root_pose']).repeat(env.num_envs, 1)
+            pose[:, :3] += env.scene.env_origins
+            q = env.robot.data.joint_pos.clone()
+            q[:, env.joint_ids] = env.tensor(rest['joint_rad'])
+            env.robot.write_root_pose_to_sim(pose)
+            env.robot.write_root_velocity_to_sim(torch.zeros((env.num_envs, 6), device=env.device))
+            env.robot.write_joint_state_to_sim(q, torch.zeros_like(q))
+            for _ in range(round(.5 / env.step_dt)):
+                env.step(zero)
+            check('recovery_diagnostics_no_transient_credit', not bool(env.reached_upright.any()))
+            env.step(zero)
+            check('recovery_diagnostics_stable_credit', bool(env.reached_upright.all()) and
+                  int(env.side_episode_counts[0, 2] - before[0, 2]) == env.num_envs)
+            env.episode_length_buf[:] = env.max_episode_length - 1
+            env.step(zero)
+            change = env.side_episode_counts - before
+            check('recovery_diagnostics_pre_reset_completion',
+                  int(change[0, 1]) == env.num_envs and int(change[0, 3]) == env.num_envs and
+                  int(change[0, 4]) == 0 and not bool(env.reached_upright.any()),
+                  counter_change=array(change).tolist())
+            env.cfg.initial_side = 'right'
+            env.reset(seed=7)
+            before = env.side_episode_counts.clone()
+            env.fallen_time[0] = env.physics['max_fallen_time_s']
+            _, _, term, _, _ = env.step(zero)
+            change = env.side_episode_counts - before
+            check('recovery_diagnostics_partial_fallen_limit', bool(term[0] and not term[1]) and
+                  int(change[1, 1]) == 1 and int(change[1, 4]) == 1 and int(change[1, 3]) == 0 and
+                  bool((change[0] == 0).all()), counter_change=array(change).tolist())
         for side in ('upright', 'left'):
             env.cfg.initial_side = side
             for direction in (-1, 1):
@@ -381,6 +443,8 @@ except BaseException:
     omni.kit.app.get_app().post_quit(1)
     raise
 finally:
+    if 'env' in locals():
+        env.close()
     sys.stdout.flush()
     sys.stderr.flush()
     app.close()

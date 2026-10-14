@@ -88,6 +88,7 @@ try:
         runner.load(str(args.resume))
     runner.learn(num_learning_iterations=args.iterations, init_at_random_ep_len=False)
     runner.save(str(run / 'model_final.pt'))
+    (run / 'recovery-diagnostics.json').write_text(json.dumps(env.unwrapped.recovery_diagnostics(), indent=2) + '\n')
     bundle = run / 'exported'
     network = runner.alg.policy
     export_policy_as_jit(network, normalizer=network.actor_obs_normalizer, path=str(bundle), filename='policy.pt')
