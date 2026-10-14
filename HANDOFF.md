@@ -15,6 +15,12 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Evaluation-only GO: development repeatability; training HOLD continues
+
+- Laptop approved full default evaluations of frozen T100 and control-100 on development seeds, sequential rendering. T100 is running into `runs/evaluation-t100-development-3000`; control will use `runs/evaluation-control100-development-3000`. Check `.setup/evaluation-*-development-3000.{log,exit}` and artifacts before resuming; avoid duplicate launches. Each has 5 crawl + 5 left + 5 right trials, full original deadlines, all videos.
+- Seed allocation confirmed by laptop at 2026-10-14 10:03:24 UTC: **development pool 2000–8999**; this comparison uses crawl 3000–3004, left 3005–3009, right 3010–3014 for BOTH policies. **Final qualification reserves 9000–9014**; never use these for development, tuning or review before Phase 4. Avoid evaluator default 1000 for formal work. Coordinator reports reservation recorded on #7.
+- Training HOLD remains in force. Neither 101–200 nor a fresh sweep is authorized by this evaluation GO. Preserve both frozen exports; report per-trial distance/lateral/yaw/time, pass counts, every video and visual gait/contact review.
+
 ### Cumulative 100 complete: one crawl diagnostic pass; HOLD for decision
 
 - The laptop coordinator relayed an explicit **HOLD at 2026-10-14 09:56:25 UTC**: finish the 100-iteration videos and review, then do not launch 101–200 or a fresh sweep until the user's decision is relayed. That review is now complete. No further training is running. Read all unread communication before doing more work.
