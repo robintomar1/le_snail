@@ -15,6 +15,17 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Phase 3 reset/reward correction and capped experiment: 2026-10-14
+
+- Active coordination is in `agents_communication.txt`. Read and answer laptop messages between work steps. Detached file watcher PID 2674421 appends to `.setup/communication-watch/updates.log`; it records changes but cannot start an agent turn. Laptop handles GitHub tracking/pushes and hardware; GPU handles simulation.
+- Standing user requirement relayed by laptop: **render every trained export**, including probes/resumes, and post exact video/contact-sheet paths with an honest gait description. Evaluation now defaults to a close whole-arm tracking camera with progress overlay; `--camera wide` retains fixed framing. Both existing exports have close three-start videos: `runs/evaluation-original-close-001/` and `runs/evaluation-resume-close-002/`. Both still fall; no gait milestone.
+- Diagnosis: `runs/reset-reward-diagnosis-001/` (15 nominal actual-physics conditions), interpretation/counterfactuals in `runs/reset-reward-analysis-001/`. Passive upright settling earns +0.3185 reward from 12.99 mm in two seconds. A settled hold has negligible drift; the existing policy still earns positive reward while falling/sliding after settlement.
+- Experimental config only: `configs/experiments/crawl-supported-001.json`, preserving the original `configs/sim.json` and policy contract. Optional simulated settled root/joint states are tied to the original asset hash and contract fingerprint; they are not physical measurements. Positive progress gets a posture ramp from zero at cosine 0.5 to full at 0.8; all backward progress remains penalized. Existing other costs remain unchanged and reward components are separately logged.
+- Red/green evidence: `runs/supported-reset-before-001/` reproduces free reset progress; `runs/supported-reset-after-002/` passes 30 actual-physics checks including signed motion and contract/reset history. Passive drift <6 micrometres over two seconds, no positive return. Portable tests: 68 passed + 4 subtests.
+- Agreed bounded experiment: fresh crawl initialization, seed42, 256 environments x **100 iterations maximum**, output `runs/crawl-supported-001`. Laptop GO and conditions recorded in communication file. Require rebuilt image/smoke before launch; then export/parity, three close videos and a longer upright diagnostic. Stop after this budget and report if supported sustained motion is absent; do not extend automatically.
+- Rebuilt image: `sha256:231d4952ab3b011e394f35a367f8c37177c500b46b74d090725c7a3421d8fc3d`. Build log `.setup/supported-rebuild.log`; smoke status `.setup/supported-smoke.exit`. Capped learning has not yet started at this entry; check run artifacts before resuming.
+
+
 ### Phase 2 pipeline executed: 2026-10-14
 
 - Final rendered regression: **25 checks passed**, exit 0 (`visual-regression/`), including the terminal-render and deadline paths. Portable suite remains **51 tests and 4 subtests passed** (`portable-phase2.log`).

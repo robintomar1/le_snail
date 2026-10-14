@@ -37,4 +37,21 @@ def load_physics(path):
             raise ValueError('Invalid protected-point location')
         if not math.isfinite(probe['radius_m']) or probe['radius_m'] <= 0:
             raise ValueError('Protected-point radius must be positive')
+    if 'positive_progress_upright_range' in config:
+        bounds = config['positive_progress_upright_range']
+        if len(bounds) != 2 or not all(math.isfinite(x) for x in bounds) or not -1 <= bounds[0] < bounds[1] <= 1:
+            raise ValueError('Progress posture gate requires an increasing interval within [-1, 1]')
+    if 'settled_starts' in config:
+        if set(config['settled_starts']) != {'upright', 'left', 'right'}:
+            raise ValueError('Settled starts require upright, left and right states')
+        for state in config['settled_starts'].values():
+            pose, joints = state['root_pose'], state['joint_rad']
+            if len(pose) != 7 or len(joints) != 6 or not all(math.isfinite(x) for x in pose + joints):
+                raise ValueError('Settled starts require finite root pose and six joint angles')
+            if pose[2] <= 0 or not math.isclose(sum(x*x for x in pose[3:]), 1., abs_tol=1e-5):
+                raise ValueError('Settled pose requires positive height and a unit quaternion')
+        for key in ('settled_start_asset_sha256', 'settled_start_contract_fingerprint'):
+            digest = config.get(key, '')
+            if len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
+                raise ValueError('Settled starts require asset and policy contract identity')
     return config

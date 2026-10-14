@@ -132,6 +132,47 @@ try:
     check('truncated_exactly_at_120s', bool(trunc.all()) and not bool(term.any()),
           scored_time_s=env.max_episode_length * env.step_dt)
 
+    if 'settled_starts' in env.physics:
+        for side, rest in env.physics['settled_starts'].items():
+            env.cfg.initial_side = side
+            obs, _ = env.reset(seed=7)
+            check(f'settled_reset_{side}', np.allclose(
+                array(env.robot.data.root_link_pose_w[0])[:3] - array(env.scene.env_origins[0]),
+                rest['root_pose'][:3], atol=1e-6) and np.allclose(
+                array(env.robot.data.joint_pos[0, env.joint_ids]), rest['joint_rad'], atol=1e-6))
+            start = env.robot.data.root_pos_w.clone()
+            total = torch.zeros(env.num_envs, device=env.device)
+            fault = False
+            for _ in range(40):
+                _, reward, term, trunc, _ = env.step(zero)
+                total += reward
+                fault |= bool(term.any() or trunc.any())
+            drift = float((env.robot.data.root_pos_w[:, :2] - start[:, :2]).abs().max())
+            check(f'no_passive_progress_{side}', not fault and drift < 1e-4 and bool((total <= 0).all()),
+                  max_drift_m=drift, max_reward=float(total.max()))
+        check('reward_components_logged', 'Reward/progress' in env.extras.get('log', {}) and
+              'Reward/gated_out_progress' in env.extras.get('log', {}))
+        for side in ('upright', 'left'):
+            env.cfg.initial_side = side
+            for direction in (-1, 1):
+                env.reset(seed=7)
+                env.robot.write_root_velocity_to_sim(env.tensor([direction*.2, 0., 0., 0., 0., 0.]).repeat(env.num_envs, 1))
+                _, reward, term, trunc, _ = env.step(zero)
+                dx = env.last_transition[0][:, 0] - env.previous_x
+                credited = env.reward_components['progress']
+                posture = -env.last_transition[1][:, 2]
+                sign_ok = bool((dx * direction > 0).all())
+                if direction < 0:
+                    credit_ok = bool((credited < 0).all()) and torch.allclose(credited, 30*dx)
+                elif side == 'left':
+                    credit_ok = bool((posture <= .5).all() and (credited == 0).all())
+                else:
+                    credit_ok = bool((posture >= .8).all() and (credited > 0).all())
+                check(f'progress_sign_{side}_{direction}', sign_ok and credit_ok and
+                      not bool(term.any() or trunc.any()) and torch.allclose(reward, sum(env.reward_components.values())),
+                      displacement_m=array(dx).tolist(), progress_reward=array(credited).tolist(),
+                      upright_cos=array(posture).tolist())
+
     # Read the composed wrench before write_data_to_sim consumes it. This exercises
     # the real environment force path, including frame rotation and COM offset.
     for side in ('upright', 'left'):

@@ -16,6 +16,7 @@ from isaaclab.utils import configclass
 from isaaclab.utils.math import quat_apply, quat_apply_inverse
 
 from le_snail.contract import PolicyContract
+from le_snail.bundle import file_hash
 from le_snail.physics import load_physics
 
 
@@ -43,6 +44,12 @@ def make_config(asset, contract_path, physics_path, *, num_envs=256, stage='craw
         raise ValueError('Unknown curriculum stage or initial side')
     if not Path(asset).is_file():
         raise FileNotFoundError(f'{asset}: run scripts/fetch_asset.py first')
+    if 'settled_starts' in p:
+        if file_hash(asset) != p['settled_start_asset_sha256'] or contract.fingerprint != p['settled_start_contract_fingerprint']:
+            raise ValueError('Settled reset states belong to a different asset or policy contract')
+        for state in p['settled_starts'].values():
+            if any(not lo <= q <= hi for q, lo, hi in zip(state['joint_rad'], contract.lower_rad, contract.upper_rad)):
+                raise ValueError('Settled reset joints exceed the policy limits')
     ratio = contract.dt / p['physics_dt']
     if not math.isclose(ratio, round(ratio)) or round(ratio) < 1:
         raise ValueError('Policy period must be an integer number of physics steps')
@@ -200,8 +207,23 @@ class SnailEnv(DirectRLEnv):
         upright = -self.robot.data.projected_gravity_b[:, 2]
         progress = self.robot.data.root_pos_w[:, 0] - self.previous_x
         command_rate = (self.target - self.old_target) / self.step_dt
-        costs = 0.3 * displacement[:, 1].square() + 0.1 * (1-upright) + 0.02 * command_rate.square().sum(dim=1) + 0.02
-        return 30. * progress - self.step_dt * costs - self.protected_contact().float()
+        gate = torch.ones_like(progress)
+        if 'positive_progress_upright_range' in self.physics:
+            low, high = self.physics['positive_progress_upright_range']
+            gate = ((upright - low) / (high - low)).clamp(0., 1.)
+        credited = progress.clamp(max=0.) + gate * progress.clamp(min=0.)
+        self.reward_components = {
+            'progress': 30. * credited,
+            'tilt': -self.step_dt * 0.1 * (1-upright),
+            'lateral': -self.step_dt * 0.3 * displacement[:, 1].square(),
+            'command_rate': -self.step_dt * 0.02 * command_rate.square().sum(dim=1),
+            'time': torch.full_like(progress, -self.step_dt * .02),
+            'protected_contact': -self.protected_contact().float(),
+        }
+        stats = {f'Reward/{name}': value.mean().detach() for name, value in self.reward_components.items()}
+        stats['Reward/gated_out_progress'] = (30. * (progress - credited)).mean().detach()
+        self.extras['log'] = {**self.extras.get('log', {}), **stats}
+        return sum(self.reward_components.values())
 
     def _get_dones(self):
         self.last_transition = (self.robot.data.root_pos_w.clone(), self.robot.data.projected_gravity_b.clone(), self.protected_contact().clone())
@@ -242,15 +264,25 @@ class SnailEnv(DirectRLEnv):
         state[:, 2] = self.scene.env_origins[env_ids, 2] + torch.where(roll.abs() > 0.1, self.physics['side_height_m'], self.physics['initial_height_m'])
         joints = self.robot.data.default_joint_pos[env_ids].clone()
         joints[:, self.joint_ids] = self.home
+        if 'settled_starts' in self.physics:
+            for side, rest in self.physics['settled_starts'].items():
+                mask = roll.abs() < .1 if side == 'upright' else (roll > .1 if side == 'left' else roll < -.1)
+                state[mask, :7] = self.tensor(rest['root_pose'])
+                state[mask, :3] += self.scene.env_origins[env_ids[mask]]
+                selected = joints[mask].clone()
+                selected[:, self.joint_ids] = self.tensor(rest['joint_rad'])
+                joints[mask] = selected
         self.robot.write_root_pose_to_sim(state[:, :7], env_ids)
         self.robot.write_root_velocity_to_sim(state[:, 7:], env_ids)
         self.robot.write_joint_state_to_sim(joints, torch.zeros_like(joints), env_ids=env_ids)
-        self.robot.set_joint_position_target(joints, env_ids=env_ids)
+        commanded = joints.clone()
+        commanded[:, self.joint_ids] = self.home
+        self.robot.set_joint_position_target(commanded, env_ids=env_ids)
         self.target[env_ids] = self.home
         self.applied_target[env_ids] = self.home
         self.old_target[env_ids] = self.home
         self.command_queue[env_ids] = self.home
-        self.previous_q[env_ids] = self.home
+        self.previous_q[env_ids] = joints[:, self.joint_ids]
         self.filtered_velocity[env_ids] = 0.
         self.start_pos[env_ids] = state[:, :3]
         self.previous_x[env_ids] = state[:, 0]

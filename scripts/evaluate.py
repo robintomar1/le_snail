@@ -12,11 +12,15 @@ parser.add_argument('--asset', default='assets/so101/snail.urdf')
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--seed', type=int, default=1000)
 parser.add_argument('--video', action='store_true')
-parser.add_argument('--probe', action='store_true', help='One five-second trial per start for pipeline diagnostics; cannot qualify a milestone')
+parser.add_argument('--camera', choices=('follow', 'wide'), default='follow', help='Close base-following view or original fixed wide view')
+parser.add_argument('--probe', action='store_true', help='One diagnostic trial per start; cannot qualify a milestone')
+parser.add_argument('--probe-seconds', type=float, default=5., help='Diagnostic duration, bounded by each original trial deadline (default: 5)')
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 if args.output.exists():
     parser.error('--output must be new')
+if not 0 < args.probe_seconds <= 120:
+    parser.error('--probe-seconds must be in (0, 120]')
 if args.video:
     args.enable_cameras = True
 app = AppLauncher(args).app
@@ -38,6 +42,7 @@ try:
     args.output.mkdir(parents=True)
     device = args.device or 'cuda:0'
     cfg = make_config(args.asset, args.bundle / 'policy.json', args.bundle / 'sim.json', num_envs=1, stage='robust', device=device, evaluation=True, seed=args.seed)
+    cfg.viewer.resolution = (960, 720)
     env = SnailEnv(cfg, render_mode='rgb_array' if args.video else None)
     policy = torch.jit.load(str(args.bundle / 'policy.pt'), map_location=device).eval()
     trials = []
@@ -67,10 +72,16 @@ try:
             with trace_path.open('w') as trace, torch.no_grad():
                 upright = float(-env.robot.data.projected_gravity_b[0, 2])
                 trial.update(0., 0., 0., upright, fault=settling_fault)
-                duration = min(5., trial.timeout_s) if args.probe else trial.timeout_s
+                duration = min(args.probe_seconds, trial.timeout_s) if args.probe else trial.timeout_s
                 for step in range(1, round(duration / contract.dt) + 1):
                     if trial.finished:
                         break
+                    if args.video and args.camera == 'follow':
+                        # Center the whole arm, not just its base: the gripper
+                        # extends far enough to leave a base-centered close shot.
+                        center = env.robot.data.body_link_pos_w[0].mean(dim=0).cpu().numpy()
+                        center[2] = max(.08, center[2])
+                        env.sim.set_camera_view(eye=center + np.array([.5, .5, .35]), target=center)
                     actions = policy(obs['policy'])
                     obs, _, term, trunc, _ = env.step(actions)
                     pos, gravity, contact = env.last_transition
@@ -82,7 +93,14 @@ try:
                     if writer is not None:
                         frame = env.terminal_frame if bool(term[0] or trunc[0]) else env.render()
                         if frame is not None:
-                            writer.append_data(np.asarray(frame, dtype=np.uint8))
+                            # A moving camera hides displacement; retain scored
+                            # world-frame progress visibly alongside the close view.
+                            from PIL import Image, ImageDraw
+                            picture = Image.fromarray(np.asarray(frame, dtype=np.uint8))
+                            draw = ImageDraw.Draw(picture)
+                            draw.rectangle((0, 0, 620, 30), fill='black')
+                            draw.text((8, 8), f'{kind}  t={elapsed:.2f}s  forward={displacement[0]:+.3f}m  lateral={displacement[1]:+.3f}m  upright={upright:+.2f}', fill='white')
+                            writer.append_data(np.asarray(picture))
                     if bool(trunc[0]) and not trial.finished:
                         trial.finished, trial.reason = True, 'simulation_timeout'
                 if not trial.finished:
@@ -93,7 +111,9 @@ try:
             trials.append(trial)
             print(kind, index, trial.reason, flush=True)
     report = summarize(trials)
-    report.update({'seed': args.seed, 'probe_only': args.probe, 'bundle_manifest': manifest, 'trials': [asdict(t) for t in trials], 'physics_validated': manifest['physics_validated']})
+    report.update({'seed': args.seed, 'camera': args.camera, 'probe_only': args.probe,
+                   'probe_seconds': args.probe_seconds if args.probe else None,
+                   'bundle_manifest': manifest, 'trials': [asdict(t) for t in trials], 'physics_validated': manifest['physics_validated']})
     report['milestone_candidate'] = not args.probe and report['passed'] and manifest['physics_validated'] and manifest['stage'] == 'robust'
     report['milestone_passed'] = False  # Video/contact review must also confirm an acceptable gait.
     report['visual_gait_review_required'] = True
