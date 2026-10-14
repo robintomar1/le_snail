@@ -15,6 +15,13 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Scaled pair authorized and first chunk launching: 2026-10-14, 09:23 UTC
+
+- Laptop relayed explicit user **GO-SCALE at09:22:00 UTC**, accepting GPU sharing and the unproven yaw-cost treatment. This supersedes the earlier hold below. Leave existing `teleop`/`vla_sim` containers untouched.
+- First matched50 NEW iterations: `runs/scale-control-001-050` and `runs/scale-treatment-001-050`; BOTH resume `runs/crawl-supported-001/model_final.pt`, seed42, crawl stage,4096 environments,64 rollout steps,16 minibatches, save interval50. Control uses supported config; treatment uses straight config (only yaw cost1.0). Logs/status: `.setup/scale-{control,treatment}-001-050.{log,exit}`. Check actual artifacts/processes before resuming; do not duplicate launch.
+- Record first-chunk it/s per arm and GPU usage (`.setup/scale-resources-001.jsonl`). Start control briefly alone to obtain a rough same-size solo throughput reference before treatment joins. Baseline GPU memory1,951/49,140MiB. If memory exceeds85% or either arm is below about60% of solo speed, reduce both symmetrically to2048 environments/8 minibatches. Existing workloads stay untouched.
+- Latest GO review cadence: full three-start30s videos at50,100,200, then every200 new iterations, plus any chunk where metrics jump. Finite/export parity checks every50-iteration chunk. Post `[TRACK #6]` outcomes and exact video paths. New exploit (rolling/sliding/protected-ish contact), upright collapse, or no improvement in forward-before-failure for TWO consecutive reviews stops that arm. Ceiling1000 new iterations per arm; review gates still apply. Code changes should reference #6.
+
 ### Straightness continuation complete; large pair held: 2026-10-14
 
 - Laptop GO for `crawl-straight-001`: resume `runs/crawl-supported-001/model_final.pt`, seed42,256 environments,100 NEW iterations maximum. Only reward change is yaw cost `-dt * (1-cos(yaw-yaw_at_reset))`, weight1.0. Config: `configs/experiments/crawl-straight-001.json`. Contract/physics/reset states/other rewards unchanged. This diagnostic continuation retains the supported gait; critic estimates must adapt to the changed reward.
