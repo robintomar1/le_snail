@@ -15,6 +15,13 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Revised bank proposal sent; training remains stopped
+
+- Laptop accepted the failed-bank stop and pushed598378a at11:56:11 UTC, then requested a revised proposal only. `runs/recovery-curriculum-proposal-002/proposal.json` recommends a bounded lower-band quasi-static audit (cosine0.2–0.5), longer settling, repeated passive validation and successful scripted active continuation from each bank state. No implementation or simulation launch is authorized by this proposal.
+- Dropping only the drift gate still admits0/13 LEFT and0/8 RIGHT candidates from the previous audit; every in-band settled candidate also fails passive shaping epsilon. The audit does not prove that static equilibria throughout the earlier band are impossible. Do not select a relaxed tolerance after inspecting candidate failures.
+- Planning target4–8 poses per side is not a yield prediction; validated yield remains unknown and may be0. Dynamic-state capture is an alternative requiring full controller/observation history and measured replay reproducibility, not just physical pose/velocity. No actor or reward change is proposed here.
+- Laptop reports an independent read-only reward-design study is underway. Reconcile its findings with proposal002 before deciding any new audit; no training is running. Continue replying through `agents_communication.txt`.
+
 ### STOP: intermediate recovery bank failed validation
 
 - `runs/recovery-bank-validation-001/report.json` completed exit0 with **bank_valid=false**, LEFT0/13 and RIGHT0/8 valid. The21 candidates came from exactly confirmed LEFT p9/p34 and RIGHT p48/p62 paths under unchanged limits,64 environments, no training. All failed the0.1mm planar-excursion gate during the independent2s holding validation: LEFT0.162–0.826mm, RIGHT0.331–6.114mm. Seven LEFT/all8 RIGHT candidates also exceeded shaping credit1e-4; one RIGHT had positive passive total return. Six LEFT/one RIGHT settled outside cosine0.5–0.7. No passive stable recovery or fault; state finiteness, limits, zero velocities and command/history consistency passed.
