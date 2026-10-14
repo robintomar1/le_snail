@@ -118,8 +118,12 @@ class SnailEnv(DirectRLEnv):
         self.start_yaw = torch.zeros(self.num_envs, device=self.device)
         self.previous_x = self.start_pos[:, 0].clone()
         self.fallen_time = torch.zeros(self.num_envs, device=self.device)
-        # Training diagnostics only; never part of observations or rewards.
+        # Episode start identity is simulator-only, shared by diagnostics and
+        # optional side-start shaping. It never enters actor observations.
         self.initial_side = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.reset_upright = torch.zeros(self.num_envs, device=self.device)
+        self.best_upright_progress = torch.zeros(self.num_envs, device=self.device)
+        self.side_shaping_reward = torch.zeros(2, device=self.device)
         self.stable_upright_steps = torch.zeros_like(self.initial_side)
         self.reached_upright = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         # Rows: left/right. Columns documented by recovery_diagnostics().
@@ -230,6 +234,18 @@ class SnailEnv(DirectRLEnv):
         if self.physics.get('yaw_cost_weight', 0.) > 0:
             heading_error = self.yaw(self.robot.data.root_quat_w) - self.start_yaw
             self.reward_components['yaw'] = -self.step_dt * self.physics['yaw_cost_weight'] * (1-torch.cos(heading_error))
+        cap = self.physics.get('side_upright_progress_reward_cap', 0.)
+        if cap > 0:
+            posture_progress = ((upright - self.reset_upright) / (.8 - self.reset_upright).clamp_min(1e-6)).clamp(0., 1.)
+            posture_progress = torch.where(self.initial_side != 0, posture_progress, 0.)
+            best = torch.maximum(self.best_upright_progress, posture_progress)
+            # Telescoping increments spend at most cap per episode. Falls and
+            # recoveries never refill the budget; only an actual reset does.
+            credit = cap * (best - self.best_upright_progress)
+            self.best_upright_progress.copy_(best)
+            self.reward_components['upright_progress'] = credit
+            self.side_shaping_reward += torch.stack((credit[self.initial_side == 1].sum(),
+                                                     credit[self.initial_side == 2].sum()))
         stats = {f'Reward/{name}': value.mean().detach() for name, value in self.reward_components.items()}
         stats['Reward/gated_out_progress'] = (30. * (progress - credited)).mean().detach()
         self.extras['log'] = {**self.extras.get('log', {}), **stats}
@@ -282,7 +298,12 @@ class SnailEnv(DirectRLEnv):
             denominator = row['completed']
             row['completed_upright_fraction'] = row['completed_after_stable_upright'] / denominator if denominator else None
             row['completed_fallen_limit_fraction'] = row['completed_at_fallen_limit'] / denominator if denominator else None
+            row['completed_other_endings'] = denominator - row['completed_at_fallen_limit']
             result['sides'][side] = row
+        result['upright_progress_shaping'] = {
+            'cap_per_side_start_episode': self.physics.get('side_upright_progress_reward_cap', 0.),
+            'credited_reward_including_open_episodes': dict(zip(('left', 'right'), self.side_shaping_reward.cpu().tolist())),
+        }
         return result
 
     def _reset_idx(self, env_ids):
@@ -331,6 +352,8 @@ class SnailEnv(DirectRLEnv):
         self.previous_x[env_ids] = state[:, 0]
         self.fallen_time[env_ids] = 0.
         self.initial_side[env_ids] = torch.where(roll > .1, 1, torch.where(roll < -.1, 2, 0))
+        self.reset_upright[env_ids] = -quat_apply_inverse(state[:, 3:7], self.gravity_w[env_ids])[:, 2]
+        self.best_upright_progress[env_ids] = 0.
         self.stable_upright_steps[env_ids] = 0
         self.reached_upright[env_ids] = False
         self.side_episode_counts[:, 0] += torch.stack(((self.initial_side[env_ids] == 1).sum(),

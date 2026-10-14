@@ -8,7 +8,9 @@ from le_snail.physics import load_physics
 
 @pytest.mark.parametrize('change', ['missing_side', 'nonunit_quaternion', 'nonfinite_joint',
                                   'missing_identity', 'reversed_gate', 'out_of_range_gate',
-                                  'negative_yaw_cost', 'nonfinite_yaw_cost'])
+                                  'negative_yaw_cost', 'nonfinite_yaw_cost',
+                                  'negative_recovery_cap', 'nonfinite_recovery_cap', 'excessive_recovery_cap',
+                                  'recovery_without_settled_starts', 'recovery_from_upright_side'])
 def test_invalid_experimental_reset_or_gate_is_rejected(tmp_path, change):
     source = Path(__file__).resolve().parents[1] / 'configs/experiments/crawl-supported-001.json'
     config = copy.deepcopy(json.loads(source.read_text()))
@@ -26,8 +28,20 @@ def test_invalid_experimental_reset_or_gate_is_rejected(tmp_path, change):
         config['positive_progress_upright_range'] = [.5, 1.1]
     elif change == 'negative_yaw_cost':
         config['yaw_cost_weight'] = -1.
-    else:
+    elif change == 'nonfinite_yaw_cost':
         config['yaw_cost_weight'] = float('nan')
+    elif change == 'negative_recovery_cap':
+        config['side_upright_progress_reward_cap'] = -1.
+    elif change == 'nonfinite_recovery_cap':
+        config['side_upright_progress_reward_cap'] = float('nan')
+    elif change == 'excessive_recovery_cap':
+        config['side_upright_progress_reward_cap'] = 1.01
+    elif change == 'recovery_without_settled_starts':
+        config['side_upright_progress_reward_cap'] = 1.
+        del config['settled_starts']
+    elif change == 'recovery_from_upright_side':
+        config['side_upright_progress_reward_cap'] = 1.
+        config['settled_starts']['left']['root_pose'][3:] = [1., 0., 0., 0.]
     path = tmp_path / 'physics.json'
     path.write_text(json.dumps(config))
     with pytest.raises(ValueError):

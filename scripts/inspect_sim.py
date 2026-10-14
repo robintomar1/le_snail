@@ -146,16 +146,93 @@ try:
             check(f'settled_posture_{side}', bool(posture_ok), upright_cos=array(upright).tolist())
             start = env.robot.data.root_pos_w.clone()
             total = torch.zeros(env.num_envs, device=env.device)
+            shaping_total = torch.zeros_like(total)
             fault = False
             for _ in range(40):
                 _, reward, term, trunc, _ = env.step(zero)
                 total += reward
+                shaping_total += env.reward_components.get('upright_progress', 0.)
                 fault |= bool(term.any() or trunc.any())
             drift = float((env.robot.data.root_pos_w[:, :2] - start[:, :2]).abs().max())
             check(f'no_passive_progress_{side}', not fault and drift < 1e-4 and bool((total <= 0).all()),
                   max_drift_m=drift, max_reward=float(total.max()))
+            if env.physics.get('side_upright_progress_reward_cap', 0.) > 0:
+                check(f'no_passive_upright_shaping_{side}', bool((shaping_total <= 1e-4).all()),
+                      max_added_reward=float(shaping_total.max()))
         check('reward_components_logged', 'Reward/progress' in env.extras.get('log', {}) and
               'Reward/gated_out_progress' in env.extras.get('log', {}))
+        if env.physics.get('side_upright_progress_reward_cap', 0.) > 0:
+            cap = env.physics['side_upright_progress_reward_cap']
+
+            def posture_credit(upright, sign=1):
+                # Controlled state intervention tests the real reward path;
+                # this is a reward invariant check, not physical recovery evidence.
+                angle = sign * np.arccos(upright)
+                pose = env.robot.data.root_link_pose_w.clone()
+                pose[:, 3:] = env.tensor([np.cos(angle/2), np.sin(angle/2), 0., 0.])
+                env.robot.write_root_pose_to_sim(pose)
+                env._get_rewards()
+                return env.reward_components['upright_progress'].clone()
+
+            for side, sign in (('left', 1), ('right', -1)):
+                env.cfg.initial_side = side
+                env.reset(seed=7)
+                env._get_rewards()
+                check(f'upright_shaping_no_reset_credit_{side}',
+                      bool((env.reward_components['upright_progress'].abs() < 1e-6).all()))
+                total = torch.zeros(env.num_envs, device=env.device)
+                credits = []
+                for upright in (.1, .3, -.2, .1, .3, .6, .8, 1.):
+                    credit = posture_credit(upright, sign)
+                    credits.append(credit)
+                    total += credit
+                check(f'upright_shaping_monotone_budget_{side}',
+                      torch.allclose(total, torch.full_like(total, cap), atol=1e-6) and
+                      bool((torch.stack(credits) >= 0).all()) and
+                      bool((credits[0] > 0).all() and (credits[1] > 0).all()),
+                      total_reward=array(total).tolist())
+                check(f'upright_shaping_repeated_partial_rise_{side}',
+                      bool((torch.stack(credits[2:5]).abs() < 1e-6).all()))
+                repeated = sum(posture_credit(u, sign) for _ in range(100) for u in (-.2, .8, 1.))
+                check(f'upright_shaping_no_fall_recovery_refill_{side}',
+                      bool((repeated.abs() < 1e-6).all()), repeated_reward=array(repeated).tolist())
+
+            env.cfg.initial_side = 'upright'
+            env.reset(seed=7)
+            total = sum(posture_credit(u) for u in (-.2, .1, .5, .8, 1., -.2, 1.))
+            check('upright_shaping_upright_start_ineligible_after_fall', bool((total == 0).all()))
+
+            env.cfg.initial_side = 'left'
+            env.reset(seed=7)
+            earned = posture_credit(.4)
+            env._reset_idx(torch.tensor([0], device=env.device))
+            env._get_rewards()
+            at_reset = env.reward_components['upright_progress'].clone()
+            remaining = posture_credit(.8)
+            check('upright_shaping_partial_reset_budget',
+                  bool((at_reset.abs() < 1e-6).all()) and
+                  abs(float(remaining[0]) - cap) < 1e-6 and
+                  abs(float(earned[1] + remaining[1]) - cap) < 1e-6,
+                  before_reset=array(earned).tolist(), after_reset=array(remaining).tolist())
+
+            env.reset(seed=7)
+            posture_credit(.3)
+            observation = env._get_observations()['policy'].clone()
+            applied = env.applied_target.clone()
+            env.physics['side_upright_progress_reward_cap'] = 0.
+            try:
+                baseline = env._get_rewards().clone()
+                components = {k: v.clone() for k, v in env.reward_components.items()}
+                gated_out = env.extras['log']['Reward/gated_out_progress'].clone()
+            finally:
+                env.physics['side_upright_progress_reward_cap'] = cap
+            shaped = env._get_rewards()
+            check('upright_shaping_preserves_existing_rewards_and_actor',
+                  'upright_progress' not in components and torch.equal(baseline, shaped) and
+                  all(torch.equal(value, env.reward_components[key]) for key, value in components.items()) and
+                  torch.equal(gated_out, env.extras['log']['Reward/gated_out_progress']) and
+                  torch.equal(observation, env._get_observations()['policy']) and
+                  torch.equal(applied, env.applied_target))
         if args.stage == 'recover':
             counts = {'upright': 0, 'left': 0, 'right': 0}
             matched = True

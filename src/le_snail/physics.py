@@ -43,6 +43,11 @@ def load_physics(path):
             raise ValueError('Progress posture gate requires an increasing interval within [-1, 1]')
     if 'yaw_cost_weight' in config and (not math.isfinite(config['yaw_cost_weight']) or config['yaw_cost_weight'] < 0):
         raise ValueError('Yaw cost weight must be finite and nonnegative')
+    cap = config.get('side_upright_progress_reward_cap', 0.)
+    if not math.isfinite(cap) or not 0 <= cap <= 1:
+        raise ValueError('Side upright progress reward cap must be finite and within [0, 1]')
+    if cap > 0 and 'settled_starts' not in config:
+        raise ValueError('Side upright progress shaping requires recorded settled starts')
     if 'settled_starts' in config:
         if set(config['settled_starts']) != {'upright', 'left', 'right'}:
             raise ValueError('Settled starts require upright, left and right states')
@@ -56,4 +61,9 @@ def load_physics(path):
             digest = config.get(key, '')
             if len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
                 raise ValueError('Settled starts require asset and policy contract identity')
+        if cap > 0:
+            for side in ('left', 'right'):
+                _, x, y, _ = config['settled_starts'][side]['root_pose'][3:]
+                if 1 - 2 * (x*x + y*y) >= .5:
+                    raise ValueError('Side upright progress shaping requires genuinely fallen side starts')
     return config
