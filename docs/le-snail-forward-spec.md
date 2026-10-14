@@ -20,7 +20,7 @@ The latest handoff supersedes older pending-preflight statements in the design a
 | Portable tests | 51 tests and 4 subtests passed inside the container. | Add behavior-focused checks for the untested simulation/export/deployment boundaries. |
 | Physics and control | Provisional gains, limits, friction, noise, delay and drag are implemented. | Validate simulated behavior and collect physical measurements. All measurement/contact flags remain false; protected-point locations are empty. |
 | Learning and evaluation | Staged PPO, checkpoint/export, fifteen-trial evaluation, video and reporting code exist. | Execute and verify the complete pipeline, then demonstrate acceptable crawling and recovery. |
-| Hardware | Assembled, calibrated arm with user-confirmed 7.4 V servos; laptop controller and Xsens IMU reader source exist. | Obtain/integrate the selected IMU, compile firmware, measure mappings and timing, validate fault handling, and run supervised trials. |
+| Hardware | Assembled, calibrated arm with sticker-checked 12 V STS3215 servos on a 12 V supply (corrects an earlier 7.4 V note); laptop controller and Xsens IMU reader source exist. | Obtain/integrate the selected IMU, compile firmware, measure mappings and timing, validate fault handling, and run supervised trials. |
 | Reproducibility | GPU workspace, assets, configs, logs and backups are available. | The workspace is not a Git checkout and source has not been pushed; experiments need an identifiable project-source snapshot as well as dependency and asset versions. |
 
 ## Solution

@@ -1,6 +1,6 @@
 # Laptop and sensor integration
 
-The Ubuntu 22 laptop runs the exported policy locally. The arm uses its existing USB servo adapter and 7.4 V supply; the Xsens MTi-1s board adds a second USB data connection. Include the sensor board, mount and extra cable in mass and drag measurements.
+The Ubuntu 22 laptop runs the exported policy locally. The arm uses its existing USB servo adapter and a 12 V supply for its 12 V STS3215 servos (sticker-checked 2026-10-14); the Xsens MTi-1s board adds a second USB data connection. Include the sensor board, mount and extra cable in mass and drag measurements.
 
 ## Python environment
 
