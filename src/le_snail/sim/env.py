@@ -183,6 +183,7 @@ class SnailEnv(DirectRLEnv):
         self.getup_potential = torch.zeros(self.num_envs, device=self.device)
         # Crawling mode: on after a stable upright, off at the next fall below cos 0.5.
         self.crawling = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self._logged_recovery = torch.zeros(14, dtype=torch.long, device=self.device)
 
     def _two_portion_rewards(self):
         from le_snail.rewards import two_portion_terms
@@ -203,6 +204,14 @@ class SnailEnv(DirectRLEnv):
         self.reward_components = terms
         stats = {f'Reward/{name}': value.mean().detach() for name, value in terms.items()}
         stats['Reward/getup_potential'] = phi.mean().detach()
+        # Per-step event counts (the runner logs iteration means; x steps per iteration = events).
+        current = torch.cat((self.side_episode_counts.flatten(), self.upright_fall_events))
+        delta = (current - self._logged_recovery).float()
+        self._logged_recovery.copy_(current)
+        for s, side in enumerate(('left', 'right')):
+            for c, event in ((0, 'started'), (1, 'completed'), (2, 'stable_get_ups')):
+                stats[f'Recovery/{side}_{event}'] = delta[s * 6 + c]
+        stats['Recovery/upright_falls'], stats['Recovery/upright_fall_recoveries'] = delta[12], delta[13]
         self.extras['log'] = {**self.extras.get('log', {}), **stats}
         return sum(terms.values())
 
