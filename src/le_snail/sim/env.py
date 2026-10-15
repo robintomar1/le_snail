@@ -164,6 +164,47 @@ class SnailEnv(DirectRLEnv):
                 raise ValueError(f'Protected probe body is ambiguous: {probe}')
             self.probes.append((ids[0], self.tensor(probe['position_m']).repeat(self.num_envs, 1), float(probe['radius_m'])))
         self._init_handover()
+        self._init_two_portion()
+
+    def _init_two_portion(self):
+        """Optional two-portion reward (#6), selected only by a 'reward' block in the physics config."""
+        self.two_portion = None
+        reward = self.physics.get('reward')
+        if reward is None:
+            return
+        from le_snail.rewards import ProgressBank
+        bank_path = Path(reward['getup_progress_bank'])
+        if file_hash(bank_path) != reward['getup_progress_bank_sha256']:
+            raise ValueError('Get-up progress bank does not match the hash recorded in the physics config')
+        # The potential uses the same per-step discount as training (0.995 per 50 ms).
+        self.two_portion = {'config': reward, 'bank': ProgressBank(bank_path, self.device), 'gamma': .995 ** (self.step_dt / .05)}
+        self.previous_phi = torch.full((self.num_envs,), float('nan'), device=self.device)
+        self.x_record = self.robot.data.root_pos_w[:, 0].clone()
+        self.getup_potential = torch.zeros(self.num_envs, device=self.device)
+        # Crawling mode: on after a stable upright, off at the next fall below cos 0.5.
+        self.crawling = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+
+    def _two_portion_rewards(self):
+        from le_snail.rewards import two_portion_terms
+        gravity = self.robot.data.projected_gravity_b
+        features = torch.cat((gravity, self.robot.data.joint_pos[:, self.joint_ids]), dim=1)
+        terms, phi, self.x_record = two_portion_terms(
+            self.two_portion['config'], self.two_portion['bank'], upright=-gravity[:, 2], features=features,
+            x=self.robot.data.root_pos_w[:, 0], x_record=self.x_record, previous_phi=self.previous_phi,
+            terminated=self.reset_terminated, command_rate=(self.target - self.old_target) / self.step_dt,
+            dt=self.step_dt, gamma=self.two_portion['gamma'], crawling=self.crawling)
+        self.previous_phi = phi
+        self.getup_potential = phi
+        terms['protected_contact'] = -self.protected_contact().float()
+        if self.teacher is not None:
+            learner = (~self.teacher_step).float()
+            terms = {name: value * learner for name, value in terms.items()}
+            self.extras['learner_mask'] = learner
+        self.reward_components = terms
+        stats = {f'Reward/{name}': value.mean().detach() for name, value in terms.items()}
+        stats['Reward/getup_potential'] = phi.mean().detach()
+        self.extras['log'] = {**self.extras.get('log', {}), **stats}
+        return sum(terms.values())
 
     def _init_handover(self):
         """Scripted-prefix handover curriculum (#6). Training resets only; never in evaluation.
@@ -406,6 +447,8 @@ class SnailEnv(DirectRLEnv):
         return bad
 
     def _get_rewards(self):
+        if self.two_portion is not None:
+            return self._two_portion_rewards()
         displacement = self.robot.data.root_pos_w - self.start_pos
         upright = -self.robot.data.projected_gravity_b[:, 2]
         progress = self.robot.data.root_pos_w[:, 0] - self.previous_x
@@ -500,6 +543,8 @@ class SnailEnv(DirectRLEnv):
         stable = self.stable_upright_steps >= round(.5 / self.step_dt) + 1
         first_upright = stable & ~self.reached_upright
         self.reached_upright |= stable
+        if self.two_portion is not None:
+            self.crawling = torch.where(stable, True, torch.where(upright < .5, False, self.crawling))
         if self.physics.get('side_start_heading_reset_at_recovery', False):
             # The heading cost targets turning while crawling, not the orientation a get-up leaves.
             recovered = first_upright & (self.initial_side != 0) & (self.teacher_left == 0)
@@ -652,6 +697,11 @@ class SnailEnv(DirectRLEnv):
                 joints[mask] = selected
         self.robot.write_root_pose_to_sim(state[:, :7], env_ids)
         self.robot.write_root_velocity_to_sim(state[:, 7:], env_ids)
+        if self.two_portion is not None:
+            # New episode: no shaping on its first step, and forward credit starts from the reset position.
+            self.previous_phi[env_ids] = float('nan')
+            self.x_record[env_ids] = state[:, 0]
+            self.crawling[env_ids] = False
         self.robot.write_joint_state_to_sim(joints, torch.zeros_like(joints), env_ids=env_ids)
         commanded = joints.clone()
         commanded[:, self.joint_ids] = self.home

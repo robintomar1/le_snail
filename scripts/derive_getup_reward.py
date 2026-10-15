@@ -21,6 +21,7 @@ p.add_argument('--output', type=Path, default=Path('runs/getup-reward-derivation
 p.add_argument('--w-phase', type=float, default=2.)
 p.add_argument('--w-stand', type=float, default=.25)
 p.add_argument('--bank-stride', type=int, default=4)
+p.add_argument('--export-bank', type=Path, help='Write the full progress bank (all successful get-ups) for the environment')
 args = p.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
 report = json.loads((args.data / 'report.json').read_text())
@@ -165,3 +166,21 @@ for side in ('left', 'right'):
             out[f'auc_success_vs_failure_at_{c}'] = float(np.mean(pairs))
 (args.output / 'derivation.json').write_text(json.dumps({'summary': summary, 'trajectories': rows}, indent=1) + '\n')
 print(json.dumps(summary, indent=1))
+if args.export_bank:
+    import hashlib
+    if args.export_bank.exists():
+        raise SystemExit('--export-bank must be a new file')
+    args.export_bank.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(args.export_bank, bank_states=full_bank.astype(np.float32), phases=full_phase.astype(np.float32),
+                        mean=mean.astype(np.float32), std=std.astype(np.float32), sigma=np.float32(sigma),
+                        k=np.int64(K_NEIGHBOURS), shrink=np.float32(SHRINK))
+    digest = lambda f: hashlib.sha256(Path(f).read_bytes()).hexdigest()
+    args.export_bank.with_suffix('.json').write_text(json.dumps({
+        'features': ['gravity_b_x', 'gravity_b_y', 'gravity_b_z', 'shoulder_pan', 'shoulder_lift', 'elbow_flex',
+                     'wrist_flex', 'wrist_roll', 'gripper'],
+        'meaning': 'States of every successful scripted get-up (perturbed successes + confirmed variants, both sides) '
+                   f'up to stable upright, every {args.bank_stride} policy steps, standardized; phase = time / time to stable upright.',
+        'states': int(len(full_bank)), 'trajectories': len(success), 'sigma': sigma, 'k': K_NEIGHBOURS, 'shrink': SHRINK,
+        'source': {str(f): digest(f) for f in sorted(args.data.iterdir())}, 'derivation_script_sha256': digest(__file__),
+        'bank_sha256': digest(args.export_bank)}, indent=1) + '\n')
+    print(f'Exported {len(full_bank)} bank states to {args.export_bank}')

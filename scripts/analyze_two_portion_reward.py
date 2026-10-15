@@ -37,8 +37,19 @@ def new_ground(x):
     return np.maximum(x - record[:-1], 0.)
 
 
+def crawl_mode(up):
+    """On after a stable upright (cos >= 0.8 for 0.5 s), off at the next fall below cos 0.5 (as in the env)."""
+    need, streak, mode, out = round(.5 / DT) + 1, 0, False, np.zeros(len(up), dtype=bool)
+    for t, u in enumerate(up):
+        streak = streak + 1 if u >= .8 else 0
+        mode = True if streak >= need else (False if u < .5 else mode)
+        out[t] = mode
+    return out
+
+
 def parts(x, up, effort, w_stand):
-    return {'standing': w_stand * DT * u2(up), 'forward': args.w_fwd * gate(up) * new_ground(x), 'effort': effort * gate(up)}
+    return {'standing': w_stand * DT * u2(up), 'forward': args.w_fwd * gate(up) * crawl_mode(up) * new_ground(x),
+            'effort': effort * gate(up)}
 
 
 def horizons(per_step, live):

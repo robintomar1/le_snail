@@ -85,6 +85,23 @@ def load_physics(path):
                 _, x, y, _ = config['settled_starts'][side]['root_pose'][3:]
                 if 1 - 2 * (x*x + y*y) >= .5:
                     raise ValueError('Side upright progress shaping requires genuinely fallen side starts')
+    if 'reward' in config:
+        reward = config['reward']
+        if reward.get('type') != 'two_portion':
+            raise ValueError('Only the two_portion reward block is supported')
+        for key in ('standing_per_s', 'forward_per_m', 'getup_progress_weight', 'effort_weight'):
+            value = reward.get(key)
+            if type(value) not in (int, float) or not math.isfinite(value) or value < 0:
+                raise ValueError(f'Reward {key} must be finite and nonnegative')
+        for key in ('standing_ramp_cos', 'forward_gate_cos'):
+            bounds = reward.get(key, [])
+            if len(bounds) != 2 or not all(math.isfinite(b) for b in bounds) or not -1 <= bounds[0] < bounds[1] <= 1:
+                raise ValueError(f'Reward {key} must be an increasing cosine interval within [-1, 1]')
+        if 'forward_requires_crawl_mode' in reward and type(reward['forward_requires_crawl_mode']) is not bool:
+            raise ValueError('Reward forward_requires_crawl_mode must be a boolean')
+        digest = reward.get('getup_progress_bank_sha256', '')
+        if not reward.get('getup_progress_bank') or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
+            raise ValueError('Reward needs a get-up progress bank path and its sha256')
     for key in ('side_start_heading_reset_at_recovery', 'side_start_progress_neutral_until_recovery'):
         if key in config and type(config[key]) is not bool:
             raise ValueError(f'{key} must be a boolean')

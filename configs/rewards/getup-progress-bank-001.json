@@ -1,0 +1,32 @@
+{
+ "features": [
+  "gravity_b_x",
+  "gravity_b_y",
+  "gravity_b_z",
+  "shoulder_pan",
+  "shoulder_lift",
+  "elbow_flex",
+  "wrist_flex",
+  "wrist_roll",
+  "gripper"
+ ],
+ "meaning": "States of every successful scripted get-up (perturbed successes + confirmed variants, both sides) up to stable upright, every 4 policy steps, standardized; phase = time / time to stable upright.",
+ "states": 7527,
+ "trajectories": 176,
+ "sigma": 0.2999220371246338,
+ "k": 16,
+ "shrink": 1.0,
+ "source": {
+  "runs/getup-trajectories-50hz-001/left-confirmed.npz": "00c0e17b1f16ef30154103dc25caedf5e28e6fec3ddf34fa0b7de0af60a96fec",
+  "runs/getup-trajectories-50hz-001/left-hold.npz": "4262937e9a707b57caefb01647b8962cb9c5f92102d9c04600c02357bfe0af98",
+  "runs/getup-trajectories-50hz-001/left-perturbed.npz": "bc33bdad4cf5085345f203e3716e90d581fcf88a6f5e348a8ef5d5cb183c1ef1",
+  "runs/getup-trajectories-50hz-001/left-random.npz": "8bb5817d8f90c4feb62a8b94fe509eff450fe5ea5747d33924c279d68284454c",
+  "runs/getup-trajectories-50hz-001/report.json": "731c37e7ed9700b93a846fa22e973241248feba959e672ff6680be2e1b61ae31",
+  "runs/getup-trajectories-50hz-001/right-confirmed.npz": "714b97370f4273c27439faf43fad03cf849c8c195708e44c7affd94fd9333b24",
+  "runs/getup-trajectories-50hz-001/right-hold.npz": "93970c3ff23f1551328e294f4a19428a25f5fbcff54cf139fea941bda8f01f3d",
+  "runs/getup-trajectories-50hz-001/right-perturbed.npz": "6d3d75c3865e936f491e92f4dda362ee3def1ad3f571e9a9239d2f86f2a2a4e9",
+  "runs/getup-trajectories-50hz-001/right-random.npz": "e0c1b8af74d4ea3115ec864d5d82ea0b84daa59c2505ef0debf26d2789af0681"
+ },
+ "derivation_script_sha256": "18be952a085802c53b8089b1902719be4efd6e1ceb270d4a85ff41b0e1a88107",
+ "bank_sha256": "0b0b4deb06a710114a542211c23b074ce59ea08834fbb84a2ccb9a4f0968207c"
+}
