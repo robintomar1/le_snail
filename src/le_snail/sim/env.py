@@ -199,6 +199,8 @@ class SnailEnv(DirectRLEnv):
         self.upright_fell = torch.zeros(n, dtype=torch.bool, device=self.device)
         self.upright_fall_recovered = torch.zeros_like(self.upright_fell)
         self.upright_fall_events = torch.zeros(2, dtype=torch.long, device=self.device)
+        self.handover_point_index = torch.full((n,), -1, dtype=torch.long, device=self.device)
+        self.schedule = None
         self.teacher = None
         if 'handover' not in self.physics:
             return
@@ -219,6 +221,17 @@ class SnailEnv(DirectRLEnv):
                 'ids': torch.arange(len(names), len(names) + len(variants), device=self.device)}
             names += [f"{side}:{v['id']}" for v in variants]
         self.teacher = {'fraction': float(config['fraction_of_side_starts']), 'sides': sides, 'names': names}
+        schedule = config.get('schedule')
+        if schedule is not None:
+            from le_snail.curriculum import ReverseSchedule
+            ordered = [v for side in ('left', 'right') for v in config['scripts'][side]]
+            self.schedule_points = [v['prefix_steps'] for v in ordered]
+            self.schedule_upright = [v.get('handover_upright') for v in ordered]
+            self.schedule = ReverseSchedule(
+                [len(points) for points in self.schedule_points], self.device,
+                uniform_share=schedule['uniform_share'], frontier_share=schedule['frontier_share'],
+                promote_at=schedule['promote_success_rate'], min_attempts=schedule['promote_min_attempts'],
+                alpha=schedule['ema_alpha'])
 
     def _assign_teachers(self, env_ids):
         side = self.initial_side[env_ids]
@@ -228,8 +241,12 @@ class SnailEnv(DirectRLEnv):
             if len(selected) == 0:
                 continue
             variant = torch.randint(len(table['keys']), (len(selected),), device=self.device)
-            point = (torch.rand(len(selected), device=self.device) * table['counts'][variant]).long()
-            point = torch.minimum(point, table['counts'][variant] - 1)
+            if self.schedule is not None:
+                point = self.schedule.sample(table['ids'][variant])
+            else:
+                point = (torch.rand(len(selected), device=self.device) * table['counts'][variant]).long()
+                point = torch.minimum(point, table['counts'][variant] - 1)
+            self.handover_point_index[selected] = point
             self.teacher_keys[selected] = table['keys'][variant]
             self.teacher_left[selected] = table['points'][variant, point]
             self.handover_prefix[selected] = table['points'][variant, point]
@@ -445,6 +462,13 @@ class SnailEnv(DirectRLEnv):
                 for s, side_name in enumerate(('left', 'right')):
                     for c, event in ((0, 'started'), (1, 'completed'), (2, 'stable_get_ups'), (6, 'attempt_truncations')):
                         stats[f'Handover/{bin_name}_{side_name}_{event}'] = delta[b, s, c]
+            if self.schedule is not None:
+                rolling = self.schedule.rolling_success()
+                for i, name in enumerate(self.teacher['names']):
+                    key = name.replace(':', '_')
+                    stats[f'Curriculum/{key}_frontier_index'] = self.schedule.frontier[i].float()
+                    stats[f'Curriculum/{key}_rolling_success'] = rolling[i]
+                    stats[f'Curriculum/{key}_attempts_at_frontier'] = self.schedule.attempts[i].float()
         self.extras['log'] = {**self.extras.get('log', {}), **stats}
         return sum(self.reward_components.values())
 
@@ -490,6 +514,12 @@ class SnailEnv(DirectRLEnv):
             for b in (1, 2, 3):
                 self.attempt_truncations[b] += (side & (attempt & (self.handover_bin == b))[:, None]).sum(dim=0)
         ended = terminated | timeout
+        if self.schedule is not None:
+            # A handover attempt resolves at its first stable upright (success) or at its end without one.
+            handed = (self.handover_bin > 0) & (self.teacher_left == 0)
+            resolved = handed & (first_upright | (ended & ~self.reached_upright))
+            if bool(resolved.any()):
+                self.schedule.record(self.handover_variant[resolved], self.handover_point_index[resolved], first_upright[resolved])
         # Diagnostics only: displacement of side starts before recovery, and upright-start falls.
         counted = (self.initial_side != 0) & (self.teacher_left == 0)
         closing = counted & (first_upright | (ended & ~self.reached_upright))
@@ -580,6 +610,13 @@ class SnailEnv(DirectRLEnv):
         result['attempt_seconds'] = self.attempt_steps * self.step_dt if self.attempt_steps else None
         result['attempt_truncations'] = {name: dict(zip(('left', 'right'), values)) for name, values
                                          in zip(bins, self.attempt_truncations.cpu().tolist())}
+        if self.schedule is not None:
+            state = self.schedule.state()
+            result['schedule'] = {'variants': self.teacher['names'], **state,
+                                  'rolling_success': self.schedule.rolling_success().cpu().tolist(),
+                                  'frontier_prefix_steps': [points[f] for points, f in zip(self.schedule_points, state['frontier'])],
+                                  'frontier_handover_upright': [None if up is None else up[f]
+                                                                for up, f in zip(self.schedule_upright, state['frontier'])]}
         return result
 
     def _reset_idx(self, env_ids):
@@ -644,6 +681,7 @@ class SnailEnv(DirectRLEnv):
             self.handover_prefix[env_ids] = 0
             self.handover_cos[env_ids] = float('nan')
             self.handover_bin[env_ids] = 0
+            self.handover_point_index[env_ids] = -1
             if not self.cfg.evaluation:
                 self._assign_teachers(env_ids)
         official = self.teacher_left[env_ids] == 0

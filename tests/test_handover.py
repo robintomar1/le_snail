@@ -13,8 +13,8 @@ KEYS = [[0.1] * 6, [0.2] * 6, [0.3] * 6]
 def handover_config():
     config = copy.deepcopy(json.loads((ROOT / 'configs/experiments/physics-v2-002.json').read_text()))
     config['handover'] = {'fraction_of_side_starts': .75, 'scripts': {
-        'left': [{'id': 'p9', 'keyframes_rad': KEYS, 'prefix_steps': [5, 10]}],
-        'right': [{'id': 'p48', 'keyframes_rad': KEYS, 'prefix_steps': [7]}]}}
+        'left': [{'id': 'p9', 'keyframes_rad': copy.deepcopy(KEYS), 'prefix_steps': [5, 10]}],
+        'right': [{'id': 'p48', 'keyframes_rad': copy.deepcopy(KEYS), 'prefix_steps': [7]}]}}
     return config
 
 
@@ -222,3 +222,77 @@ def test_teacher_observations_do_not_update_the_normalizer():
                          {'learner_mask': torch.ones(2), 'next_observation_is_learner': torch.tensor([1., 0.])})
     assert int(normalizer.count) == before + 1
     assert float(normalizer._mean.abs().max()) < 1.
+
+
+SCHEDULE = {'type': 'reverse', 'uniform_share': .1, 'frontier_share': .5, 'promote_success_rate': .5,
+            'promote_min_attempts': 50, 'ema_alpha': .02}
+
+
+def test_valid_schedule_config_loads(tmp_path):
+    config = handover_config()
+    config['handover']['schedule'] = dict(SCHEDULE)
+    config['handover']['scripts']['left'][0]['handover_upright'] = [-.1, .3]
+    assert load_physics(write(tmp_path, config))['handover']['schedule']['type'] == 'reverse'
+
+
+@pytest.mark.parametrize('change', ['type', 'share', 'zero_rate', 'zero_alpha', 'attempts', 'unsorted', 'upright_length'])
+def test_invalid_schedule_config_is_rejected(tmp_path, change):
+    config = handover_config()
+    schedule = config['handover']['schedule'] = dict(SCHEDULE)
+    if change == 'type':
+        schedule['type'] = 'forward'
+    elif change == 'share':
+        schedule['uniform_share'] = 1.5
+    elif change == 'zero_rate':
+        schedule['promote_success_rate'] = 0.
+    elif change == 'zero_alpha':
+        schedule['ema_alpha'] = 0.
+    elif change == 'attempts':
+        schedule['promote_min_attempts'] = 0
+    elif change == 'unsorted':
+        config['handover']['scripts']['left'][0]['prefix_steps'] = [10, 5]
+    elif change == 'upright_length':
+        config['handover']['scripts']['left'][0]['handover_upright'] = [.1]
+    with pytest.raises(ValueError):
+        load_physics(write(tmp_path, config))
+
+
+def test_reverse_schedule_starts_at_latest_point_and_samples_its_window():
+    torch = pytest.importorskip('torch')
+    from le_snail.curriculum import ReverseSchedule
+    torch.manual_seed(0)
+    schedule = ReverseSchedule([5, 3], 'cpu', uniform_share=0., frontier_share=1.)
+    assert schedule.frontier.tolist() == [4, 2]
+    assert set(schedule.sample(torch.zeros(200, dtype=torch.long)).tolist()) == {4}
+    schedule = ReverseSchedule([5, 3], 'cpu', uniform_share=.1, frontier_share=.5)
+    points = schedule.sample(torch.zeros(4000, dtype=torch.long))
+    assert float((points == 4).float().mean()) == pytest.approx(.9 + .1 / 5, abs=.03)
+    assert set(points.tolist()) == {0, 1, 2, 3, 4}
+
+
+def test_reverse_schedule_promotes_only_after_enough_successes_and_never_retreats():
+    torch = pytest.importorskip('torch')
+    from le_snail.curriculum import ReverseSchedule
+    schedule = ReverseSchedule([3], 'cpu', min_attempts=50, promote_at=.5, alpha=.02)
+    v, p = torch.zeros(49, dtype=torch.long), torch.full((49,), 2)
+    assert not bool(schedule.record(v, p, torch.ones(49, dtype=torch.bool)).any())
+    assert float(schedule.rolling_success()[0]) == pytest.approx(1.)
+    assert bool(schedule.record(v[:1], p[:1], torch.ones(1, dtype=torch.bool)).all())
+    assert schedule.frontier.tolist() == [1] and schedule.attempts.tolist() == [0] and schedule.promotions.tolist() == [1]
+    # Outcomes at points other than the frontier do not count; a 40% rate never promotes.
+    schedule.record(torch.zeros(100, dtype=torch.long), torch.full((100,), 2), torch.ones(100, dtype=torch.bool))
+    assert schedule.attempts.tolist() == [0]
+    wins = torch.tensor([True, True, False, False, False] * 40)
+    for chunk in wins.split(10):
+        schedule.record(torch.zeros(len(chunk), dtype=torch.long), torch.ones(len(chunk), dtype=torch.long), chunk)
+    assert schedule.frontier.tolist() == [1]
+    assert float(schedule.rolling_success()[0]) == pytest.approx(.4, abs=.05)
+    for _ in range(3):
+        schedule.record(torch.zeros(60, dtype=torch.long), schedule.frontier.repeat(60), torch.ones(60, dtype=torch.bool))
+    assert schedule.frontier.tolist() == [0]
+    state = schedule.state()
+    restored = ReverseSchedule([3], 'cpu')
+    restored.load(state)
+    assert restored.state() == state
+    with pytest.raises(ValueError):
+        ReverseSchedule([4], 'cpu').load(state)

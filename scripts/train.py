@@ -18,6 +18,7 @@ parser.add_argument('--num-mini-batches', type=int, default=4)
 parser.add_argument('--save-interval', type=int, default=100)
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--resume', type=Path)
+parser.add_argument('--handover-state', type=Path, help='handover-state.json from a previous chunk: restores the curriculum frontier')
 parser.add_argument('--output', type=Path, required=True)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
@@ -90,8 +91,16 @@ try:
     (run / 'run.json').write_text(json.dumps({'stage': args.stage, 'seed': args.seed, 'iterations': args.iterations, 'num_envs': args.num_envs, 'runner': config,
         'source_sha256': file_hash(run / 'source.tar.gz'),
         'resume_checkpoint': str(args.resume.resolve()) if args.resume else None,
-        'resume_checkpoint_sha256': file_hash(args.resume) if args.resume else None}, indent=2) + '\n')
-    env = RslRlVecEnvWrapper(SnailEnv(cfg))
+        'resume_checkpoint_sha256': file_hash(args.resume) if args.resume else None,
+        'handover_state': str(args.handover_state.resolve()) if args.handover_state else None,
+        'handover_state_sha256': file_hash(args.handover_state) if args.handover_state else None}, indent=2) + '\n')
+    raw_env = SnailEnv(cfg)
+    if args.handover_state:
+        if raw_env.schedule is None:
+            raise ValueError('--handover-state needs a physics config with a handover schedule')
+        # Restore the frontier before the wrapper's first reset samples any handover point.
+        raw_env.schedule.load(json.loads(args.handover_state.read_text()))
+    env = RslRlVecEnvWrapper(raw_env)
     runner = OnPolicyRunner(env, config, log_dir=str(run), device=device)
     if args.resume:
         runner.load(str(args.resume))
@@ -105,6 +114,8 @@ try:
         (run / 'action_diagnostics.json').write_text(json.dumps(env.unwrapped.action_diagnostics(), indent=2) + '\n')
     if handover:
         (run / 'handover-diagnostics.json').write_text(json.dumps(env.unwrapped.handover_diagnostics(), indent=2) + '\n')
+        if env.unwrapped.schedule is not None:
+            (run / 'handover-state.json').write_text(json.dumps(env.unwrapped.schedule.state(), indent=2) + '\n')
     bundle = run / 'exported'
     network = runner.alg.policy
     export_policy_as_jit(network, normalizer=network.actor_obs_normalizer, path=str(bundle), filename='policy.pt')

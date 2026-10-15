@@ -182,6 +182,9 @@ try:
                     check('accounting_restarts_at_handover', reset_ok, env=i)
                     key = env.teacher['names'][int(env.handover_variant[i])]
                     stats['assignments'][key] = stats['assignments'].get(key, 0) + 1
+                    if env.schedule is not None:
+                        latest = int(env.schedule.counts[int(env.handover_variant[i])]) - 1
+                        stats['scheduled_at_latest'] = stats.get('scheduled_at_latest', 0) + int(int(env.handover_point_index[i]) == latest)
                 # First learner step after handover: shaping credit is relative to the handover posture.
                 first = handed_previous & ~teacher & (dones == 0)
                 for i in torch.nonzero(first).flatten().tolist():
@@ -217,6 +220,13 @@ try:
     report['recovery_diagnostics_after_rollout'] = diagnostics
     if env.attempt_steps > 0:
         check('attempt_truncations_observed', stats['attempt_truncations'] > 0, truncations=stats['attempt_truncations'])
+    if env.schedule is not None:
+        # Fresh schedule: the frontier is each variant's latest point, so ~92% of starts land there.
+        share = stats.get('scheduled_at_latest', 0) / max(stats['handovers'], 1)
+        state = env.schedule.state()
+        check('schedule_starts_at_latest_points', share >= .75 and state['frontier'] == [c - 1 for c in state['counts']], share=share)
+        check('schedule_records_frontier_attempts', sum(state['attempts']) + sum(state['promotions']) > 0, state=state)
+        stats['schedule_state'] = state
     check('every_variant_assigned', set(stats['assignments']) == set(env.teacher['names']), seen=sorted(stats['assignments']))
     unchanged = all(torch.equal(network.state_dict()[k], v) for k, v in initial_parameters.items())
     check('no_parameter_update', unchanged)
@@ -244,6 +254,7 @@ try:
         table['counts'] = torch.ones(len(lengths), dtype=torch.long, device=device)
         full_lengths[side] = lengths
     env.teacher['fraction'] = 1.  # Reproduction concerns the teacher itself; every reset gets one.
+    env.schedule = None  # Full-length scripts replace the audited points here, so sample them uniformly.
     with torch.inference_mode():
         observations, _ = env.reset()
         start = env.robot.data.root_pos_w.clone()

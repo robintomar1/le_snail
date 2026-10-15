@@ -117,6 +117,23 @@ def validate_handover(config):
             steps = variant['prefix_steps']
             if not steps or any(type(k) is not int or k < 1 for k in steps):
                 raise ValueError('Teacher prefix steps must be positive integers; k=0 is an official start')
+            if 'schedule' in handover and steps != sorted(set(steps)):
+                raise ValueError('A scheduled curriculum needs strictly increasing prefix steps (earliest to latest)')
+            upright = variant.get('handover_upright')
+            if upright is not None and (len(upright) != len(steps) or not all(math.isfinite(c) for c in upright)):
+                raise ValueError('handover_upright must give one finite cosine per prefix step')
+    schedule = handover.get('schedule')
+    if schedule is not None:
+        if schedule.get('type') != 'reverse':
+            raise ValueError('Only the reverse handover schedule is supported')
+        for key in ('uniform_share', 'frontier_share', 'promote_success_rate', 'ema_alpha'):
+            value = schedule.get(key)
+            if type(value) not in (int, float) or not math.isfinite(value) or not 0 <= value <= 1:
+                raise ValueError(f'Schedule {key} must be within [0, 1]')
+        if not schedule['promote_success_rate'] > 0 or not schedule['ema_alpha'] > 0:
+            raise ValueError('Schedule promotion rate and EMA alpha must be positive')
+        if type(schedule.get('promote_min_attempts')) is not int or schedule['promote_min_attempts'] < 1:
+            raise ValueError('Schedule promote_min_attempts must be a positive integer')
 
 
 def combine_box_payload(mass, center, inertia, payload):
