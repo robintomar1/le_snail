@@ -19,6 +19,8 @@ p.add_argument('--control', type=Path, default=Path('runs/handover-control-001-0
 p.add_argument('--treatment', type=Path, default=Path('runs/handover-treatment-001-050'))
 p.add_argument('--control-eval', type=Path, default=Path('runs/evaluation-handover-control-050-development-5100'))
 p.add_argument('--treatment-eval', type=Path, default=Path('runs/evaluation-handover-treatment-050-development-5100'))
+p.add_argument('--arm', nargs=3, action='append', metavar=('NAME', 'RUN', 'EVALUATION'),
+               help='Additional arm to compare; repeatable')
 p.add_argument('--no-sheets', action='store_true')
 args = p.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
@@ -41,8 +43,8 @@ def training(run, log):
             'handover_diagnostics': load(run / 'handover-diagnostics.json'),
             'learner_fraction': {'n': len(learner), 'min': min(learner, default=None), 'max': max(learner, default=None)},
             'speed': {k: speed.get(k) for k in ('over_limit_environment_time_fraction', 'peak_abs_velocity_rad_s',
-                                                 'longest_driven_proxy_over_limit_s', 'flag_over_one_percent_time',
-                                                 'flag_sustained_driven_proxy')},
+                                                 'longest_driven_proxy_over_limit_s', 'longest_driven_proxy_location',
+                                                 'flag_over_one_percent_time', 'flag_sustained_driven_proxy')},
             'action_fractions_all_joints': (actions.get('all') or {}).get('fractions_all_joints'),
             'exported_policy': str(run / 'exported' / 'policy.pt')}
 
@@ -59,7 +61,10 @@ def evaluation(run, sheets):
         stem = f'{kind}-{number}'
         trace = [json.loads(line) for line in (run / f'{stem}.jsonl').read_text().splitlines()]
         last = trace[-1] if trace else {}
+        upright_at = trial['recovery_time_s']
+        at_upright = min(trace, key=lambda r: abs(r['time_s'] - upright_at)) if upright_at is not None and trace else None
         rows.append({'trial': stem, 'seed': report['seed'] + index, 'success': trial['success'], 'reason': trial['reason'],
+                     'yaw_from_start_deg_at_stable_upright': math.degrees(at_upright.get('yaw_from_start_rad', 0.)) if at_upright else None,
                      'time_s': last.get('time_s'), 'forward_m': last.get('forward_m'), 'lateral_m': last.get('lateral_m'),
                      'max_abs_lateral_m': max((abs(r['lateral_m']) for r in trace), default=0.),
                      'yaw_from_start_deg': math.degrees(last.get('yaw_from_start_rad', 0.)),
@@ -96,8 +101,13 @@ def evaluation(run, sheets):
 
 
 arms = {}
-for name, run, ev in (('control', args.control, args.control_eval), ('treatment', args.treatment, args.treatment_eval)):
+selected = [('control', args.control, args.control_eval), ('treatment', args.treatment, args.treatment_eval)]
+selected += [(name, Path(run), Path(ev)) for name, run, ev in (args.arm or [])]
+for name, run, ev in selected:
     arms[name] = {'training': training(run, Path('.setup') / f'{run.name}.log'), 'evaluation': evaluation(ev, not args.no_sheets)}
+    rates = load(run / 'handover-bin-rates.json')
+    if rates is not None:
+        arms[name]['training']['handover_bin_rates'] = rates['windows']
 
 
 def training_get_ups(arm):
@@ -113,7 +123,12 @@ summary = {}
 for name, arm in arms.items():
     official, handover = training_get_ups(arm)
     ev = arm['evaluation']
+    truncations = (arm['training']['handover_diagnostics'] or {}).get('attempt_truncations')
+    recovery = arm['training']['recovery_diagnostics_official_side_starts'] or {}
     summary[name] = {'training_official_side_get_ups': official, 'training_handover_get_ups_by_bin': handover,
+                     'training_attempt_truncations': truncations,
+                     'training_side_start_before_first_upright': recovery.get('side_start_before_first_upright'),
+                     'training_upright_start_falls': recovery.get('upright_start_falls'),
                      'evaluation_crawl_successes': ev['groups']['crawl']['successes'] if ev else None,
                      'evaluation_left_successes': ev['groups']['left']['successes'] if ev else None,
                      'evaluation_right_successes': ev['groups']['right']['successes'] if ev else None,

@@ -31,6 +31,17 @@ def test_valid_handover_config_loads(tmp_path):
     assert load_physics(write(tmp_path, config))['handover']['attempt_seconds'] == 3.
 
 
+@pytest.mark.parametrize('key', ['side_start_heading_reset_at_recovery', 'side_start_progress_neutral_until_recovery'])
+def test_side_start_reward_flags_must_be_boolean(tmp_path, key):
+    config = handover_config()
+    config[key] = True
+    assert load_physics(write(tmp_path, config))[key] is True
+    for value in (1, 'true', None):
+        config[key] = value
+        with pytest.raises(ValueError):
+            load_physics(write(tmp_path, config))
+
+
 @pytest.mark.parametrize('value', [0., -1., float('nan'), float('inf'), True, '3'])
 def test_invalid_attempt_seconds_is_rejected(tmp_path, value):
     config = handover_config()

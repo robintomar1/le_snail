@@ -85,6 +85,9 @@ def load_physics(path):
                 _, x, y, _ = config['settled_starts'][side]['root_pose'][3:]
                 if 1 - 2 * (x*x + y*y) >= .5:
                     raise ValueError('Side upright progress shaping requires genuinely fallen side starts')
+    for key in ('side_start_heading_reset_at_recovery', 'side_start_progress_neutral_until_recovery'):
+        if key in config and type(config[key]) is not bool:
+            raise ValueError(f'{key} must be a boolean')
     if 'handover' in config:
         validate_handover(config)
     return config

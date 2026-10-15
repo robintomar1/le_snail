@@ -82,8 +82,29 @@ try:
                 failures.append({'check': name, **details})
         return ok
 
+    neutral = bool(validation.get('side_start_progress_neutral_until_recovery', False))
+    heading_reset = bool(validation.get('side_start_heading_reset_at_recovery', False))
+    reward_stats = {'progress_counted_after_recovery_steps': 0, 'first_recoveries': 0}
+
+    def reward_rules(ended, reached_before, phase):
+        """Side-start reward fixes: neutral progress before recovery; heading reset at first recovery."""
+        learner_side = (env.initial_side > 0) & ~ended & ~env.teacher_step
+        progress = env.reward_components['progress']
+        if neutral:
+            before = learner_side & ~env.reached_upright
+            check('progress_neutral_before_recovery', bool((progress[before] == 0).all()), phase=phase)
+            after = learner_side & env.reached_upright
+            reward_stats['progress_counted_after_recovery_steps'] += int((progress[after] != 0).sum())
+        if heading_reset:
+            first = learner_side & env.reached_upright & ~reached_before
+            reward_stats['first_recoveries'] += int(first.sum())
+            heading = env.yaw(env.last_transition_quat)
+            check('heading_reset_at_first_recovery', bool(torch.equal(env.start_yaw[first], heading[first]))
+                  and bool((env.reward_components['yaw'][first] == 0).all()), phase=phase)
+
     def save():
         report['failures'] = failures
+        report['reward_rule_stats'] = reward_stats
         report['passes'] = all(c['passed'] for c in report['checks'].values())
         (args.output / 'report.json').write_text(json.dumps(report, indent=1, allow_nan=False) + '\n')
 
@@ -124,6 +145,7 @@ try:
                     for s, side_name in enumerate(side_names):
                         for c, event in event_columns:
                             logged[b, s, c] += float(extras['log'][f'Handover/{bin_name}_{side_name}_{event}'])
+                reward_rules(dones > 0, reached_before, 'rollout')
                 if env.attempt_steps > 0:
                     ended, time_outs = dones > 0, extras['time_outs'].to(device).bool()
                     truncated = ended & time_outs & (bin_before > 0)
@@ -189,6 +211,10 @@ try:
     check('teacher_and_learner_steps_present', stats['teacher_steps'] > 0 and stats['learner_steps'] > 0 and stats['handovers'] > 0)
     columns = [c for c, _ in event_columns]
     check('per_step_log_sums_to_counters', bool(torch.equal(logged[:, :, columns], env._logged_counts[:, :, columns].float())))
+    diagnostics = env.recovery_diagnostics()
+    closed = sum(side['closed_episodes'] for bins in diagnostics['side_start_before_first_upright']['bins'].values() for side in bins.values())
+    check('prerecovery_and_fall_diagnostics_present', closed > 0 and 'upright_start_falls' in diagnostics, closed=closed)
+    report['recovery_diagnostics_after_rollout'] = diagnostics
     if env.attempt_steps > 0:
         check('attempt_truncations_observed', stats['attempt_truncations'] > 0, truncations=stats['attempt_truncations'])
     check('every_variant_assigned', set(stats['assignments']) == set(env.teacher['names']), seen=sorted(stats['assignments']))
@@ -233,6 +259,7 @@ try:
             recovered_before = env.reached_upright.clone()
             observations, _, terminated, truncated, _ = env.step(actions)
             check('recovered_handover_not_truncated', not bool((truncated & recovered_before & live).any()), step=step)
+            reward_rules(terminated | truncated, recovered_before, 'reproduction')
             script_completed |= was_teacher & (env.teacher_key_i > 3)
             pos, gravity, _ = env.last_transition
             disp = (pos - start).cpu().numpy()
@@ -254,6 +281,10 @@ try:
     reproduction['script_completed_in_prefix'] = int(script_completed.sum())
     report['script_reproduction'] = {'criterion': 'stable upright in >=90% of full-script handover episodes per side; '
                                                   'sweep confirmed batches reached 64/64 per side', **reproduction}
+    if neutral:
+        check('progress_counted_after_recovery', reward_stats['progress_counted_after_recovery_steps'] > 0)
+    if heading_reset:
+        check('first_recoveries_observed', reward_stats['first_recoveries'] > 0)
     save()
     print(json.dumps({'phase': 'reproduction', **reproduction}), flush=True)
 

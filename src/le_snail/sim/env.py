@@ -191,6 +191,14 @@ class SnailEnv(DirectRLEnv):
         self.attempt_steps = 0
         self.attempt_truncations = torch.zeros((4, 2), dtype=torch.long, device=self.device)
         self._logged_counts = torch.zeros((4, 2, 7), dtype=torch.long, device=self.device)
+        # Side starts before their first stable upright: net |x|, |y| at recovery or episode end, lane exits.
+        self.prerecovery_count = torch.zeros((4, 2), dtype=torch.long, device=self.device)
+        self.prerecovery_abs_sum = torch.zeros((4, 2, 2), device=self.device)
+        self.prerecovery_lane_exits = torch.zeros((4, 2), dtype=torch.long, device=self.device)
+        # Upright-start episodes: falls (cos < 0.5 for >= 0.5 s) and later stable recoveries.
+        self.upright_fell = torch.zeros(n, dtype=torch.bool, device=self.device)
+        self.upright_fall_recovered = torch.zeros_like(self.upright_fell)
+        self.upright_fall_events = torch.zeros(2, dtype=torch.long, device=self.device)
         self.teacher = None
         if 'handover' not in self.physics:
             return
@@ -389,6 +397,10 @@ class SnailEnv(DirectRLEnv):
             low, high = self.physics['positive_progress_upright_range']
             gate = ((upright - low) / (high - low)).clamp(0., 1.)
         credited = progress.clamp(max=0.) + gate * progress.clamp(min=0.)
+        if self.physics.get('side_start_progress_neutral_until_recovery', False):
+            # Before its first stable upright a side-start episode neither earns nor pays for
+            # displacement, like the acceptance test, which measures progress only after recovery.
+            credited = torch.where((self.initial_side != 0) & ~self.reached_upright, 0., credited)
         self.reward_components = {
             'progress': 30. * credited,
             'tilt': -self.step_dt * 0.1 * (1-upright),
@@ -463,6 +475,10 @@ class SnailEnv(DirectRLEnv):
         stable = self.stable_upright_steps >= round(.5 / self.step_dt) + 1
         first_upright = stable & ~self.reached_upright
         self.reached_upright |= stable
+        if self.physics.get('side_start_heading_reset_at_recovery', False):
+            # The heading cost targets turning while crawling, not the orientation a get-up leaves.
+            recovered = first_upright & (self.initial_side != 0) & (self.teacher_left == 0)
+            self.start_yaw[recovered] = self.yaw(self.robot.data.root_quat_w[recovered])
         side = torch.stack((self.initial_side == 1, self.initial_side == 2), dim=1)
         if self.teacher is not None and self.attempt_steps > 0:
             # End an unrecovered handover attempt as a time-out so its value is bootstrapped and
@@ -474,6 +490,20 @@ class SnailEnv(DirectRLEnv):
             for b in (1, 2, 3):
                 self.attempt_truncations[b] += (side & (attempt & (self.handover_bin == b))[:, None]).sum(dim=0)
         ended = terminated | timeout
+        # Diagnostics only: displacement of side starts before recovery, and upright-start falls.
+        counted = (self.initial_side != 0) & (self.teacher_left == 0)
+        closing = counted & (first_upright | (ended & ~self.reached_upright))
+        lane_exit = counted & terminated & (displacement[:, 1].abs() > 0.15) & ~self.reached_upright
+        for b in range(4):
+            rows = side & (closing & (self.handover_bin == b))[:, None]
+            self.prerecovery_count[b] += rows.sum(dim=0)
+            self.prerecovery_abs_sum[b] += (rows[:, :, None] * displacement[:, None, :2].abs()).sum(dim=0)
+            self.prerecovery_lane_exits[b] += (side & (lane_exit & (self.handover_bin == b))[:, None]).sum(dim=0)
+        fell = (self.initial_side == 0) & ~self.upright_fell & (self.fallen_time >= .5)
+        self.upright_fell |= fell
+        recovered_after_fall = self.upright_fell & ~self.upright_fall_recovered & stable
+        self.upright_fall_recovered |= recovered_after_fall
+        self.upright_fall_events += torch.stack((fell.sum(), recovered_after_fall.sum()))
         events = torch.stack((ended, first_upright, ended & self.reached_upright,
                               ended & fallen_timeout, ended & fallen_timeout & self.reached_upright), dim=1)
         if self.teacher is None:
@@ -516,6 +546,19 @@ class SnailEnv(DirectRLEnv):
         }
         if self.teacher is not None:
             result['scope'] += '; scripted-prefix handover episodes are excluded here (see handover_diagnostics), and shaping credit includes handover episodes'
+        bins = ('official_start', 'handover_upright_below_0.2', 'handover_upright_0.2_to_0.5', 'handover_upright_at_least_0.5')
+        counts, sums, lanes = (t.cpu().tolist() for t in (self.prerecovery_count, self.prerecovery_abs_sum, self.prerecovery_lane_exits))
+        result['side_start_before_first_upright'] = {
+            'definition': 'Net |x| and |y| from the episode or handover start at the first stable upright, or at episode end without '
+                          'one; lane exits = terminations with |y| > 0.15 m before recovery. Teacher prefixes excluded.',
+            'bins': {name: {side: {'closed_episodes': counts[b][s],
+                                   'mean_abs_x_m': sums[b][s][0] / counts[b][s] if counts[b][s] else None,
+                                   'mean_abs_y_m': sums[b][s][1] / counts[b][s] if counts[b][s] else None,
+                                   'lane_exits_before_recovery': lanes[b][s]}
+                            for s, side in enumerate(('left', 'right'))} for b, name in enumerate(bins)}}
+        falls, recoveries = self.upright_fall_events.cpu().tolist()
+        result['upright_start_falls'] = {'definition': 'upright-start episodes with cos < 0.5 for >= 0.5 s, and those reaching stable upright afterwards',
+                                         'episodes_with_fall': falls, 'recovered_after_fall': recoveries}
         return result
 
     def handover_diagnostics(self):
@@ -590,6 +633,8 @@ class SnailEnv(DirectRLEnv):
         self.best_upright_progress[env_ids] = 0.
         self.stable_upright_steps[env_ids] = 0
         self.reached_upright[env_ids] = False
+        self.upright_fell[env_ids] = False
+        self.upright_fall_recovered[env_ids] = False
         if self.teacher is not None:
             self.teacher_left[env_ids] = 0
             self.teacher_key_i[env_ids] = 0
