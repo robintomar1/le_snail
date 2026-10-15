@@ -19,11 +19,15 @@ if args.steps_per_iteration is None:
     args.steps_per_iteration = json.loads((args.run / 'run.json').read_text())['runner']['num_steps_per_env']
 accumulator = EventAccumulator(str(args.run), size_guidance={'scalars': 0})
 accumulator.Reload()
-per_iteration, curriculum = {}, {}
+per_iteration, curriculum, means = {}, {}, {}
 for tag in accumulator.Tags()['scalars']:
     if tag.startswith(('Handover/', 'Recovery/')):
         for event in accumulator.Scalars(tag):
             per_iteration.setdefault(event.step, {})[tag] = event.value * args.steps_per_iteration
+    elif tag.startswith(('Reward/', 'Train/', 'Policy/', 'Loss/')) and not tag.endswith('/time'):
+        # Per-step reward means (per environment) and runner statistics: averaged over each window.
+        for event in accumulator.Scalars(tag):
+            means.setdefault(event.step, {})[tag] = event.value
     elif tag.startswith('Curriculum/'):
         # Frontier state is logged every step; the iteration mean is its average over that iteration.
         for event in accumulator.Scalars(tag):
@@ -51,9 +55,16 @@ for first in range(0, len(iterations), args.window):
     recovery = {tag[len('Recovery/'):]: round(value) for tag, value in totals.items() if tag.startswith('Recovery/')}
     if recovery:
         row['recovery'] = recovery
+    values = {}
+    for iteration in chunk:
+        for tag, value in means.get(iteration, {}).items():
+            values.setdefault(tag, []).append(value)
+    if values:
+        row['window_means'] = {tag: sum(v) / len(v) for tag, v in sorted(values.items())}
     windows.append(row)
 result = {'run': str(args.run), 'window_iterations': args.window, 'steps_per_iteration': args.steps_per_iteration,
-          'method': 'per-iteration mean of per-step event counts x steps per iteration, summed per window',
+          'method': 'per-iteration mean of per-step event counts x steps per iteration, summed per window; '
+                    'window_means: Reward/* (per-step mean over environments), Train/*, Policy/*, Loss/* averaged over the window',
           'windows': windows}
 (args.run / 'handover-bin-rates.json').write_text(json.dumps(result, indent=1) + '\n')
 print(json.dumps(result, indent=1))

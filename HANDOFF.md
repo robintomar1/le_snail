@@ -1,6 +1,6 @@
 # Le Snail: GPU-machine handoff
 
-Updated 2026-10-14. Resume in `/home/clutterbot/robin/le_snail_ws` on the GPU host.
+Updated 2026-10-15. Resume in `/home/clutterbot/robin/le_snail_ws` on the GPU host.
 The user requested moving work here so the agent can run Docker and inspect the GPU directly.
 
 ## Start here
@@ -14,6 +14,13 @@ The user requested moving work here so the agent can run Docker and inspect the 
 The user has approved implementation, remote workspace setup, Docker builds, simulation work and the initial training plan. They ran the setup with `--accept-eula`. Continue that work without repeating the design interview. Physical robot motion still requires actual hardware measurements, calibration and the deployment checks described in `docs/hardware.md`.
 
 ## Current runtime status and exact blocker
+
+### Two-portion training GO (robin): 8192 envs, 50 Hz, fresh init (2026-10-15, launched 06:42:22 UTC)
+
+- Verification 004 (`runs/two-portion-verification-004`, `scripts/validate_two_portion_reward.py`): 16/16 checks pass. Components match an independent float64 recomputation within 5e-7. Scripted successes are positive from 1 s (min L 0.44, R 0.58) and about +2.0 at 8 s; failed get-ups that end lying keep <= -0.03; lying still earns exactly 0 and flailing about 0; upright standing +0.05/s; real crawl motion about +11 in 8 s. Per-step side-start get-ups and upright-start falls/recoveries are logged under Recovery/* (commit 14422fa).
+- GO (robin: "yes go ahead, maybe increase the number of envs to 8192"): `runs/two-portion-50hz-001-100`, `configs/experiments/two-portion-002.json`, contract `configs/policy-50hz-001.json`, stage recover, 8192 envs / 16 minibatches, 100 iterations, save every 50, seed 42, fresh init (the 50 Hz contract has no checkpoint). Log and exit code: `.setup/two-portion-50hz-001-100.{log,exit}`. Announced 05:10:10; delayed by the GPU session's usage limit; launched 06:42:22 through `/tmp/le_snail_kit_start_v2.lock`. It shares the GPU with the laptop's resumed scripted gait study (#13: <= 64 envs per job, `runs/gait-study-<family>/`).
+- Pre-registered review (05:10:10): at 100 iterations, per-10-iteration indicators from `scripts/handover_bin_rates.py runs/two-portion-50hz-001-100` (run in the container): side-start stable get-ups per side, mean Reward/getup_potential, forward reward, upright-start falls/recoveries. Also export parity, the 15-trial evaluation with videos on fresh dev seeds 5300-5314 (next block 5320-5334), and the speed flags. Continue in 100-iteration chunks only while side-start get-ups or the crawl/forward indicator rose over the last two windows; stop when flat for 100 iterations or at 500 total. Safety stops: exploit or rolling on video, non-finite values, sustained evaluation over-speed.
+- Start-lock pattern for later Kit jobs: take the lock in the foreground shell, `exec 9>/tmp/le_snail_kit_start_v2.lock; flock 9; (sleep 150; flock -u 9) &`, then start the job with `9>&-`. Do not put `flock` inside a backgrounded `&&` list: this launch did, which was harmless only because the lock was free.
 
 ### TRAINING STOPPED by robin; script-derived two-portion reward; 50 Hz contract (2026-10-15 ~04:20-04:50 UTC)
 
