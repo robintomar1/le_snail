@@ -78,6 +78,15 @@ try:
                       'num_mini_batches': args.num_mini_batches, 'learning_rate': 3e-4, 'schedule': 'adaptive',
                       'gamma': 0.995, 'lam': 0.95, 'desired_kl': 0.01, 'max_grad_norm': 1.},
     }
+    handover = 'handover' in json.loads(Path(args.physics).read_text())
+    if handover:
+        # Scripted-prefix handover: teacher steps are excluded from learning (#6).
+        if args.stage == 'crawl':
+            raise ValueError('Handover prefixes need side starts; use the recover or robust stage')
+        import rsl_rl.runners.on_policy_runner as runner_module
+        from le_snail.masked_ppo import MaskedPPO
+        runner_module.MaskedPPO = MaskedPPO
+        config['algorithm']['class_name'] = 'MaskedPPO'
     (run / 'run.json').write_text(json.dumps({'stage': args.stage, 'seed': args.seed, 'iterations': args.iterations, 'num_envs': args.num_envs, 'runner': config,
         'source_sha256': file_hash(run / 'source.tar.gz'),
         'resume_checkpoint': str(args.resume.resolve()) if args.resume else None,
@@ -94,6 +103,8 @@ try:
     (run / 'speed-diagnostics.json').write_text(json.dumps(env.unwrapped.speed_diagnostics(), indent=2) + '\n')
     if hasattr(env.unwrapped, 'action_diagnostics'):
         (run / 'action_diagnostics.json').write_text(json.dumps(env.unwrapped.action_diagnostics(), indent=2) + '\n')
+    if handover:
+        (run / 'handover-diagnostics.json').write_text(json.dumps(env.unwrapped.handover_diagnostics(), indent=2) + '\n')
     bundle = run / 'exported'
     network = runner.alg.policy
     export_policy_as_jit(network, normalizer=network.actor_obs_normalizer, path=str(bundle), filename='policy.pt')

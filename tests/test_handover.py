@@ -1,0 +1,186 @@
+"""Scripted-prefix handover curriculum (#6): config validation, masked diagnostics and masked PPO."""
+import copy
+import json
+from pathlib import Path
+
+import pytest
+from le_snail.physics import load_physics
+
+ROOT = Path(__file__).resolve().parents[1]
+KEYS = [[0.1] * 6, [0.2] * 6, [0.3] * 6]
+
+
+def handover_config():
+    config = copy.deepcopy(json.loads((ROOT / 'configs/experiments/physics-v2-002.json').read_text()))
+    config['handover'] = {'fraction_of_side_starts': .75, 'scripts': {
+        'left': [{'id': 'p9', 'keyframes_rad': KEYS, 'prefix_steps': [5, 10]}],
+        'right': [{'id': 'p48', 'keyframes_rad': KEYS, 'prefix_steps': [7]}]}}
+    return config
+
+
+def write(tmp_path, config):
+    path = tmp_path / 'handover.json'
+    path.write_text(json.dumps(config))
+    return path
+
+
+def test_valid_handover_config_loads(tmp_path):
+    assert load_physics(write(tmp_path, handover_config()))['handover']['fraction_of_side_starts'] == .75
+
+
+@pytest.mark.parametrize('change', ['zero_fraction', 'excess_fraction', 'missing_side', 'empty_side', 'short_keys',
+                                    'nonfinite_key', 'official_prefix', 'float_prefix', 'empty_prefix', 'no_side_starts',
+                                    'no_settled_starts'])
+def test_invalid_handover_config_is_rejected(tmp_path, change):
+    config = handover_config()
+    handover = config['handover']
+    left = handover['scripts']['left'][0]
+    if change == 'zero_fraction':
+        handover['fraction_of_side_starts'] = 0.
+    elif change == 'excess_fraction':
+        handover['fraction_of_side_starts'] = 1.5
+    elif change == 'missing_side':
+        del handover['scripts']['right']
+    elif change == 'empty_side':
+        handover['scripts']['right'] = []
+    elif change == 'short_keys':
+        left['keyframes_rad'] = KEYS[:2]
+    elif change == 'nonfinite_key':
+        left['keyframes_rad'][1][2] = float('nan')
+    elif change == 'official_prefix':
+        left['prefix_steps'] = [0, 5]
+    elif change == 'float_prefix':
+        left['prefix_steps'] = [5.]
+    elif change == 'empty_prefix':
+        left['prefix_steps'] = []
+    elif change == 'no_side_starts':
+        config['recovery_start_fraction'] = 0.
+    elif change == 'no_settled_starts':
+        for key in ('settled_starts', 'side_upright_progress_reward_cap'):
+            del config[key]
+    with pytest.raises(ValueError):
+        load_physics(write(tmp_path, config))
+
+
+def test_teacher_rows_are_excluded_from_speed_and_action_diagnostics():
+    torch = pytest.importorskip('torch')
+    from le_snail.action_stats import ActionDiagnostics
+    from le_snail.speed import PhysicsSpeedDiagnostics
+    speed = PhysicsSpeedDiagnostics(2, 1, .005, 'cpu')
+    learner = torch.tensor([True, False])
+    for _ in range(4):
+        speed.update(torch.tensor([[5.], [9.]]), torch.full((2, 1), 4.), torch.ones(2, 1), mask=learner)
+    report = speed.report()
+    assert report['environment_time_samples'] == 4
+    assert report['environment_over_limit_samples'] == 4
+    assert report['peak_abs_velocity_rad_s'] == 5.
+    actions = ActionDiagnostics(2, ['j'], 'cpu')
+    raw = torch.tensor([[2.], [3.]])
+    target = torch.zeros(2, 1)
+    actions.update(raw, target, target, target, target, torch.ones(1), -torch.ones(1), torch.ones(1), mask=learner)
+    window = actions.report()['all']
+    assert window['samples_per_joint'] == 1
+    assert window['counts_per_joint']['raw_out_of_range'] == [1]
+    assert actions.report()['peak_abs_raw_action_per_joint'] == [2.]
+
+
+def rollout(torch, alg, steps, envs, masks, seed=0):
+    from tensordict import TensorDict
+    generator = torch.Generator().manual_seed(seed)
+    alg.init_storage('rl', envs, steps, TensorDict({'policy': torch.zeros(envs, 24)}, batch_size=[envs]), [6])
+    for step in range(steps):
+        obs = TensorDict({'policy': torch.randn(envs, 24, generator=generator)}, batch_size=[envs])
+        alg.act(obs)
+        rewards = torch.randn(envs, generator=generator)
+        dones = (torch.rand(envs, generator=generator) < .1).long()
+        extras = {} if masks is None else {'learner_mask': masks[step], 'next_observation_is_learner': torch.ones(envs)}
+        alg.process_env_step(obs, rewards, dones, extras)
+    last = TensorDict({'policy': torch.randn(envs, 24, generator=generator)}, batch_size=[envs])
+    alg.compute_returns(last)
+
+
+def make_algorithms(torch, masked_class):
+    pytest.importorskip('rsl_rl')
+    from tensordict import TensorDict
+    from rsl_rl.algorithms import PPO
+    from rsl_rl.modules import ActorCritic
+    obs = TensorDict({'policy': torch.zeros(1, 24)}, batch_size=[1])
+    groups = {'policy': ['policy'], 'critic': ['policy']}
+    settings = dict(init_noise_std=.5, actor_obs_normalization=True, critic_obs_normalization=True,
+                    actor_hidden_dims=[32, 32], critic_hidden_dims=[32, 32], activation='elu')
+    algorithm = dict(value_loss_coef=1., use_clipped_value_loss=True, clip_param=.2, entropy_coef=.01,
+                     num_learning_epochs=2, num_mini_batches=4, learning_rate=3e-4, schedule='adaptive',
+                     gamma=.995, lam=.95, desired_kl=.01, max_grad_norm=1.)
+    torch.manual_seed(1)
+    stock = PPO(ActorCritic(obs, groups, 6, **settings), **algorithm)
+    torch.manual_seed(1)
+    masked = masked_class(ActorCritic(obs, groups, 6, **settings), **algorithm)
+    masked.policy.load_state_dict(stock.policy.state_dict())
+    return stock, masked
+
+
+def test_masked_ppo_matches_stock_ppo_when_every_step_is_learner():
+    torch = pytest.importorskip('torch')
+    pytest.importorskip('rsl_rl')
+    from le_snail.masked_ppo import MaskedPPO
+    stock, masked = make_algorithms(torch, MaskedPPO)
+    for alg in (stock, masked):
+        torch.manual_seed(7)
+        rollout(torch, alg, 16, 8, None)
+    torch.testing.assert_close(masked.storage.advantages, stock.storage.advantages, rtol=1e-5, atol=1e-6)
+    torch.manual_seed(11)
+    stock_losses = stock.update()
+    torch.manual_seed(11)
+    masked_losses = masked.update()
+    for name in ('value_function', 'surrogate', 'entropy'):
+        assert masked_losses[name] == pytest.approx(stock_losses[name], rel=1e-4, abs=1e-6)
+    assert masked_losses['learner_fraction'] == 1.
+    for key, value in stock.policy.state_dict().items():
+        torch.testing.assert_close(masked.policy.state_dict()[key], value, rtol=1e-4, atol=1e-6)
+
+
+def test_teacher_transitions_do_not_influence_the_update():
+    torch = pytest.importorskip('torch')
+    pytest.importorskip('rsl_rl')
+    from le_snail.masked_ppo import MaskedPPO
+    steps, envs = 16, 8
+    masks = torch.ones(steps, envs)
+    masks[:3, :4] = 0.  # teacher prefix at the start of the rollout for half of the environments
+    results = []
+    for corrupt in (False, True):
+        _, alg = make_algorithms(torch, MaskedPPO)
+        torch.manual_seed(7)
+        rollout(torch, alg, steps, envs, masks)
+        teacher = alg.learner_mask == 0
+        assert bool((alg.storage.advantages[teacher] == 0).all())
+        learner = alg.storage.advantages[~teacher]
+        assert float(learner.mean()) == pytest.approx(0., abs=1e-5)
+        assert float(learner.std()) == pytest.approx(1., rel=1e-4)
+        if corrupt:
+            # Arbitrary teacher actions, log-probabilities and value targets must not matter.
+            alg.storage.actions[:3, :4] = 9.
+            alg.storage.actions_log_prob[:3, :4] = -50.
+            alg.storage.returns[:3, :4] = 1e3
+        torch.manual_seed(11)
+        losses = alg.update()
+        assert losses['learner_fraction'] == pytest.approx(1 - 12 / (steps * envs), abs=.2)
+        results.append({k: v.clone() for k, v in alg.policy.state_dict().items()})
+    for key, value in results[0].items():
+        torch.testing.assert_close(results[1][key], value)
+
+
+def test_teacher_observations_do_not_update_the_normalizer():
+    torch = pytest.importorskip('torch')
+    pytest.importorskip('rsl_rl')
+    from tensordict import TensorDict
+    from le_snail.masked_ppo import MaskedPPO
+    _, alg = make_algorithms(torch, MaskedPPO)
+    alg.init_storage('rl', 2, 4, TensorDict({'policy': torch.zeros(2, 24)}, batch_size=[2]), [6])
+    normalizer = alg.policy.actor_obs_normalizer
+    before = int(normalizer.count)
+    obs = TensorDict({'policy': torch.stack((torch.zeros(24), torch.full((24,), 1e6)))}, batch_size=[2])
+    alg.act(obs)
+    alg.process_env_step(obs, torch.zeros(2), torch.zeros(2, dtype=torch.long),
+                         {'learner_mask': torch.ones(2), 'next_observation_is_learner': torch.tensor([1., 0.])})
+    assert int(normalizer.count) == before + 1
+    assert float(normalizer._mean.abs().max()) < 1.

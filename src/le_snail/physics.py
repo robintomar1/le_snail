@@ -85,7 +85,32 @@ def load_physics(path):
                 _, x, y, _ = config['settled_starts'][side]['root_pose'][3:]
                 if 1 - 2 * (x*x + y*y) >= .5:
                     raise ValueError('Side upright progress shaping requires genuinely fallen side starts')
+    if 'handover' in config:
+        validate_handover(config)
     return config
+
+
+def validate_handover(config):
+    """Scripted-prefix handover curriculum: teacher keyframes and audited prefix lengths."""
+    handover = config['handover']
+    fraction = handover.get('fraction_of_side_starts')
+    if not isinstance(fraction, (int, float)) or not math.isfinite(fraction) or not 0 < fraction <= 1:
+        raise ValueError('Handover fraction_of_side_starts must be within (0, 1]')
+    if 'settled_starts' not in config or not config['recovery_start_fraction'] > 0:
+        raise ValueError('Handover requires recorded settled starts and side starts')
+    scripts = handover.get('scripts', {})
+    if set(scripts) != {'left', 'right'}:
+        raise ValueError('Handover requires left and right teacher scripts')
+    for side, variants in scripts.items():
+        if not variants:
+            raise ValueError(f'Handover {side} requires at least one teacher script')
+        for variant in variants:
+            keys = variant['keyframes_rad']
+            if len(keys) != 3 or any(len(k) != 6 or not all(math.isfinite(q) for q in k) for k in keys):
+                raise ValueError('Each teacher script requires three finite six-joint keyframes')
+            steps = variant['prefix_steps']
+            if not steps or any(type(k) is not int or k < 1 for k in steps):
+                raise ValueError('Teacher prefix steps must be positive integers; k=0 is an official start')
 
 
 def combine_box_payload(mass, center, inertia, payload):

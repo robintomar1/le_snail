@@ -163,6 +163,98 @@ class SnailEnv(DirectRLEnv):
             if len(ids) != 1:
                 raise ValueError(f'Protected probe body is ambiguous: {probe}')
             self.probes.append((ids[0], self.tensor(probe['position_m']).repeat(self.num_envs, 1), float(probe['radius_m'])))
+        self._init_handover()
+
+    def _init_handover(self):
+        """Scripted-prefix handover curriculum (#6). Training resets only; never in evaluation.
+
+        A teacher script drives the first k policy steps of some side-start episodes through the
+        normal action path. Those steps earn zero reward and are reported through extras so the
+        learner can exclude them; at handover the episode accounting restarts from that state.
+        """
+        n = self.num_envs
+        self._env_index = torch.arange(n, device=self.device)
+        self.teacher_step = torch.zeros(n, dtype=torch.bool, device=self.device)
+        self.teacher_left = torch.zeros(n, dtype=torch.long, device=self.device)
+        self.teacher_keys = torch.zeros((n, 4, 6), device=self.device)
+        self.teacher_key_i = torch.zeros_like(self.teacher_left)
+        self.teacher_held = torch.zeros_like(self.teacher_left)
+        self.handover_pending = torch.zeros_like(self.teacher_step)
+        self.handover_variant = torch.full((n,), -1, dtype=torch.long, device=self.device)
+        self.handover_prefix = torch.zeros_like(self.teacher_left)
+        self.handover_cos = torch.full((n,), float('nan'), device=self.device)
+        # Bin 0: official start without a prefix; 1-3: handover upright <0.2, 0.2-0.5, >=0.5.
+        self.handover_bin = torch.zeros_like(self.teacher_left)
+        self.handover_counts = torch.zeros((4, 2, 6), dtype=torch.long, device=self.device)
+        self.prefix_terminations = torch.zeros(2, dtype=torch.long, device=self.device)
+        self.teacher = None
+        if 'handover' not in self.physics:
+            return
+        config = self.physics['handover']
+        names, sides = [], {}
+        for code, side in ((1, 'left'), (2, 'right')):
+            variants = config['scripts'][side]
+            longest = max(len(v['prefix_steps']) for v in variants)
+            points = torch.zeros((len(variants), longest), dtype=torch.long, device=self.device)
+            for i, variant in enumerate(variants):
+                points[i, :len(variant['prefix_steps'])] = torch.tensor(variant['prefix_steps'], device=self.device)
+            sides[code] = {
+                'keys': self.tensor([v['keyframes_rad'] + [self.contract.home_rad] for v in variants]),
+                'points': points,
+                'counts': torch.tensor([len(v['prefix_steps']) for v in variants], device=self.device),
+                'ids': torch.arange(len(names), len(names) + len(variants), device=self.device)}
+            names += [f"{side}:{v['id']}" for v in variants]
+        self.teacher = {'fraction': float(config['fraction_of_side_starts']), 'sides': sides, 'names': names}
+
+    def _assign_teachers(self, env_ids):
+        side = self.initial_side[env_ids]
+        chosen = (side > 0) & (torch.rand(len(env_ids), device=self.device) < self.teacher['fraction'])
+        for code, table in self.teacher['sides'].items():
+            selected = env_ids[chosen & (side == code)]
+            if len(selected) == 0:
+                continue
+            variant = torch.randint(len(table['keys']), (len(selected),), device=self.device)
+            point = (torch.rand(len(selected), device=self.device) * table['counts'][variant]).long()
+            point = torch.minimum(point, table['counts'][variant] - 1)
+            self.teacher_keys[selected] = table['keys'][variant]
+            self.teacher_left[selected] = table['points'][variant, point]
+            self.handover_prefix[selected] = table['points'][variant, point]
+            self.handover_variant[selected] = table['ids'][variant]
+
+    def _advance_teacher(self, teacher_actions):
+        # Same keyframe sequencing as the feasibility probe: advance once the slewed target
+        # reaches the clipped goal and holds (2 steps; 20 at the final home keyframe).
+        active = self.teacher_step
+        clipped = torch.clamp(self.home + teacher_actions * self.scale, self.lower, self.upper)
+        reached = (self.target - clipped).abs().amax(dim=1) < 1e-3
+        running = active & (self.teacher_key_i <= 3)
+        self.teacher_held = torch.where(reached & running, self.teacher_held + 1, 0)
+        advance = running & (self.teacher_held >= torch.where(self.teacher_key_i == 3, 20, 2))
+        self.teacher_key_i += advance.long()
+        self.teacher_held = torch.where(advance, 0, self.teacher_held)
+        self.teacher_left -= active.long()
+        finished = active & ((self.teacher_left <= 0) | (self.teacher_key_i > 3))
+        self.teacher_left = torch.where(finished, 0, self.teacher_left)
+        self.handover_pending |= finished
+
+    def _handover(self, mask):
+        """Restart episode accounting at the teacher's final state; the learner earns nothing for the prefix."""
+        upright = -self.robot.data.projected_gravity_b[:, 2]
+        self.start_pos[mask] = self.robot.data.root_pos_w[mask]
+        self.start_yaw[mask] = self.yaw(self.robot.data.root_quat_w[mask])
+        self.reset_upright[mask] = upright[mask]
+        self.best_upright_progress[mask] = 0.
+        self.fallen_time[mask] = 0.
+        self.stable_upright_steps[mask] = 0
+        self.reached_upright[mask] = False
+        self.episode_length_buf[mask] = 0
+        self.handover_cos[mask] = upright[mask]
+        bins = 1 + (upright >= .2).long() + (upright >= .5).long()
+        self.handover_bin[mask] = bins[mask]
+        self.handover_pending[mask] = False
+        side = torch.stack((self.initial_side == 1, self.initial_side == 2), dim=1) & mask[:, None]
+        for b in (1, 2, 3):
+            self.handover_counts[b, :, 0] += (side & (bins == b)[:, None]).sum(dim=0)
 
     def tensor(self, value):
         return torch.tensor(value, device=self.device, dtype=torch.float32)
@@ -181,14 +273,24 @@ class SnailEnv(DirectRLEnv):
     def _pre_physics_step(self, actions):
         if not torch.isfinite(actions).all():
             raise RuntimeError('Policy produced non-finite actions')
+        teacher_actions = learner = None
+        if self.teacher is not None:
+            self.teacher_step = self.teacher_left > 0
+            learner = ~self.teacher_step
+            if bool(self.teacher_step.any()):
+                goal = self.teacher_keys[self._env_index, self.teacher_key_i.clamp(max=3)]
+                teacher_actions = ((goal - self.home) / self.scale).clamp(-1., 1.)
+                actions = torch.where(self.teacher_step[:, None], teacher_actions, actions)
         self.old_target.copy_(self.target)
         unclipped = self.home + torch.clamp(actions, -1., 1.) * self.scale
         desired = torch.clamp(unclipped, self.lower, self.upper)
         self.target += torch.clamp(desired - self.target, -self.slew, self.slew)
-        self.action_monitor.update(actions, unclipped, desired, self.old_target, self.target, self.slew, self.lower, self.upper)
+        self.action_monitor.update(actions, unclipped, desired, self.old_target, self.target, self.slew, self.lower, self.upper, mask=learner)
         self.command_queue[:, 1] = self.command_queue[:, 0]
         self.command_queue[:, 0] = self.target
         self.previous_x = self.robot.data.root_pos_w[:, 0].clone()
+        if teacher_actions is not None:
+            self._advance_teacher(teacher_actions)
 
     def _record_speed(self, completed_step):
         if completed_step <= self._speed_sample_counter:
@@ -196,7 +298,8 @@ class SnailEnv(DirectRLEnv):
         q = self.robot.data.joint_pos[:, self.joint_ids]
         qd = self.robot.data.joint_vel[:, self.joint_ids]
         pd = self.physics['stiffness_nm_rad'] * (self.applied_target - q) - self.physics['damping_nm_s_rad'] * qd
-        self.speed_monitor.update(qd, self.robot.data.joint_vel_limits[:, self.joint_ids], pd)
+        learner = ~self.teacher_step if self.teacher is not None else None
+        self.speed_monitor.update(qd, self.robot.data.joint_vel_limits[:, self.joint_ids], pd, mask=learner)
         self._speed_sample_counter = completed_step
 
     def speed_diagnostics(self):
@@ -233,6 +336,9 @@ class SnailEnv(DirectRLEnv):
         )
 
     def _get_observations(self):
+        if self.teacher is not None:
+            # After resets: rows the learner will act on next (teacher prefixes excluded).
+            self.extras['next_observation_is_learner'] = (self.teacher_left == 0).float()
         if self.observation_step == self.common_step_counter:
             return {'policy': self.observation_cache}
         q = self.robot.data.joint_pos[:, self.joint_ids].clone()
@@ -278,20 +384,30 @@ class SnailEnv(DirectRLEnv):
         if self.physics.get('yaw_cost_weight', 0.) > 0:
             heading_error = self.yaw(self.robot.data.root_quat_w) - self.start_yaw
             self.reward_components['yaw'] = -self.step_dt * self.physics['yaw_cost_weight'] * (1-torch.cos(heading_error))
+        learner = None
+        if self.teacher is not None:
+            # Teacher prefix steps earn nothing; the learner gets no credit for the script's work.
+            learner = (~self.teacher_step).float()
+            self.reward_components = {name: value * learner for name, value in self.reward_components.items()}
         cap = self.physics.get('side_upright_progress_reward_cap', 0.)
         if cap > 0:
             posture_progress = ((upright - self.reset_upright) / (.8 - self.reset_upright).clamp_min(1e-6)).clamp(0., 1.)
             posture_progress = torch.where(self.initial_side != 0, posture_progress, 0.)
             best = torch.maximum(self.best_upright_progress, posture_progress)
             # Telescoping increments spend at most cap per episode. Falls and
-            # recoveries never refill the budget; only an actual reset does.
+            # recoveries never refill the budget; only an actual reset or handover does.
             credit = cap * (best - self.best_upright_progress)
+            if learner is not None:
+                credit = credit * learner
             self.best_upright_progress.copy_(best)
             self.reward_components['upright_progress'] = credit
             self.side_shaping_reward += torch.stack((credit[self.initial_side == 1].sum(),
                                                      credit[self.initial_side == 2].sum()))
         stats = {f'Reward/{name}': value.mean().detach() for name, value in self.reward_components.items()}
-        stats['Reward/gated_out_progress'] = (30. * (progress - credited)).mean().detach()
+        gated_out = 30. * (progress - credited)
+        stats['Reward/gated_out_progress'] = (gated_out if learner is None else gated_out * learner).mean().detach()
+        if learner is not None:
+            self.extras['learner_mask'] = learner
         self.extras['log'] = {**self.extras.get('log', {}), **stats}
         return sum(self.reward_components.values())
 
@@ -303,7 +419,9 @@ class SnailEnv(DirectRLEnv):
     def _get_dones(self):
         # Capture the final substep before any environment is autoreset.
         self._record_speed(self._sim_step_counter)
-        self.last_transition = (self.robot.data.root_pos_w.clone(), self.robot.data.projected_gravity_b.clone(), self.protected_contact().clone())
+        if self.teacher is not None and bool(self.handover_pending.any()):
+            self._handover(self.handover_pending.clone())
+        self.last_transition =(self.robot.data.root_pos_w.clone(), self.robot.data.projected_gravity_b.clone(), self.protected_contact().clone())
         self.last_transition_quat = self.robot.data.root_quat_w.clone()
         displacement = self.robot.data.root_pos_w - self.start_pos
         upright = -self.robot.data.projected_gravity_b[:, 2]
@@ -324,7 +442,19 @@ class SnailEnv(DirectRLEnv):
         side = torch.stack((self.initial_side == 1, self.initial_side == 2), dim=1)
         events = torch.stack((ended, first_upright, ended & self.reached_upright,
                               ended & fallen_timeout, ended & fallen_timeout & self.reached_upright), dim=1)
-        self.side_episode_counts[:, 1:] += (side[:, :, None] & events[:, None, :]).sum(dim=0)
+        if self.teacher is None:
+            self.side_episode_counts[:, 1:] += (side[:, :, None] & events[:, None, :]).sum(dim=0)
+        else:
+            # Official side starts keep the existing counters. Prefix steps are excluded and
+            # handover episodes are counted by the upright cosine at handover.
+            in_prefix = self.teacher_left > 0
+            for b in range(4):
+                rows = side & (~in_prefix & (self.handover_bin == b))[:, None]
+                counts = (rows[:, :, None] & events[:, None, :]).sum(dim=0)
+                self.handover_counts[b, :, 1:] += counts
+                if b == 0:
+                    self.side_episode_counts[:, 1:] += counts
+            self.prefix_terminations += (side & (in_prefix & ended)[:, None]).sum(dim=0)
         if self.render_mode == 'rgb_array' and bool((terminated | timeout).any()):
             # Capture before DirectRLEnv auto-resets so evaluation videos retain
             # the same terminal transition used by the acceptance scorer.
@@ -350,6 +480,26 @@ class SnailEnv(DirectRLEnv):
             'cap_per_side_start_episode': self.physics.get('side_upright_progress_reward_cap', 0.),
             'credited_reward_including_open_episodes': dict(zip(('left', 'right'), self.side_shaping_reward.cpu().tolist())),
         }
+        if self.teacher is not None:
+            result['scope'] += '; scripted-prefix handover episodes are excluded here (see handover_diagnostics), and shaping credit includes handover episodes'
+        return result
+
+    def handover_diagnostics(self):
+        """Side-start outcomes by start type; counts for handover episodes begin at handover."""
+        if self.teacher is None:
+            return None
+        names = ('started', 'completed', 'reached_stable_upright', 'completed_after_stable_upright',
+                 'completed_at_fallen_limit', 'completed_after_upright_and_at_fallen_limit')
+        bins = ('official_start', 'handover_upright_below_0.2', 'handover_upright_0.2_to_0.5', 'handover_upright_at_least_0.5')
+        result = {'stable_definition': 'upright cosine >=0.8 continuously for0.5s, after handover for prefix episodes',
+                  'fraction_of_side_starts': self.teacher['fraction'], 'teacher_scripts': self.teacher['names'],
+                  'prefix_steps': {code: table['points'].cpu().tolist() for code, table in
+                                   (('left', self.teacher['sides'][1]), ('right', self.teacher['sides'][2]))},
+                  'bins': {}}
+        for b, name in enumerate(bins):
+            result['bins'][name] = {side: dict(zip(names, values))
+                                    for side, values in zip(('left', 'right'), self.handover_counts[b].cpu().tolist())}
+        result['prefix_terminations'] = dict(zip(('left', 'right'), self.prefix_terminations.cpu().tolist()))
         return result
 
     def _reset_idx(self, env_ids):
@@ -403,8 +553,22 @@ class SnailEnv(DirectRLEnv):
         self.best_upright_progress[env_ids] = 0.
         self.stable_upright_steps[env_ids] = 0
         self.reached_upright[env_ids] = False
-        self.side_episode_counts[:, 0] += torch.stack(((self.initial_side[env_ids] == 1).sum(),
-                                                      (self.initial_side[env_ids] == 2).sum()))
+        if self.teacher is not None:
+            self.teacher_left[env_ids] = 0
+            self.teacher_key_i[env_ids] = 0
+            self.teacher_held[env_ids] = 0
+            self.handover_pending[env_ids] = False
+            self.handover_variant[env_ids] = -1
+            self.handover_prefix[env_ids] = 0
+            self.handover_cos[env_ids] = float('nan')
+            self.handover_bin[env_ids] = 0
+            if not self.cfg.evaluation:
+                self._assign_teachers(env_ids)
+        official = self.teacher_left[env_ids] == 0
+        starts = torch.stack((((self.initial_side[env_ids] == 1) & official).sum(),
+                              ((self.initial_side[env_ids] == 2) & official).sum()))
+        self.side_episode_counts[:, 0] += starts
+        self.handover_counts[0, :, 0] += starts
         self.observation_step = -1
         self._randomize(env_ids)
 
