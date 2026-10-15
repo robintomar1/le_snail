@@ -98,6 +98,9 @@ def validate_handover(config):
         raise ValueError('Handover fraction_of_side_starts must be within (0, 1]')
     if 'settled_starts' not in config or not config['recovery_start_fraction'] > 0:
         raise ValueError('Handover requires recorded settled starts and side starts')
+    attempt = handover.get('attempt_seconds')
+    if attempt is not None and (type(attempt) not in (int, float) or not math.isfinite(attempt) or attempt <= 0):
+        raise ValueError('Handover attempt_seconds must be finite and positive when present')
     scripts = handover.get('scripts', {})
     if set(scripts) != {'left', 'right'}:
         raise ValueError('Handover requires left and right teacher scripts')

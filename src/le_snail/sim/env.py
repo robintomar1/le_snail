@@ -187,10 +187,16 @@ class SnailEnv(DirectRLEnv):
         self.handover_bin = torch.zeros_like(self.teacher_left)
         self.handover_counts = torch.zeros((4, 2, 6), dtype=torch.long, device=self.device)
         self.prefix_terminations = torch.zeros(2, dtype=torch.long, device=self.device)
+        # Unrecovered handover attempts may end early as time-outs (bootstrapped, never absorbing).
+        self.attempt_steps = 0
+        self.attempt_truncations = torch.zeros((4, 2), dtype=torch.long, device=self.device)
+        self._logged_counts = torch.zeros((4, 2, 7), dtype=torch.long, device=self.device)
         self.teacher = None
         if 'handover' not in self.physics:
             return
         config = self.physics['handover']
+        if 'attempt_seconds' in config:
+            self.attempt_steps = round(config['attempt_seconds'] / self.step_dt)
         names, sides = [], {}
         for code, side in ((1, 'left'), (2, 'right')):
             variants = config['scripts'][side]
@@ -299,11 +305,21 @@ class SnailEnv(DirectRLEnv):
         qd = self.robot.data.joint_vel[:, self.joint_ids]
         pd = self.physics['stiffness_nm_rad'] * (self.applied_target - q) - self.physics['damping_nm_s_rad'] * qd
         learner = ~self.teacher_step if self.teacher is not None else None
-        self.speed_monitor.update(qd, self.robot.data.joint_vel_limits[:, self.joint_ids], pd, mask=learner)
+        context = torch.stack((self.handover_bin.float(), -self.robot.data.projected_gravity_b[:, 2],
+                               self.teacher_step.float(), self.episode_length_buf.float()), dim=1)
+        self.speed_monitor.update(qd, self.robot.data.joint_vel_limits[:, self.joint_ids], pd, mask=learner, context=context)
         self._speed_sample_counter = completed_step
 
     def speed_diagnostics(self):
-        return self.speed_monitor.report()
+        report = self.speed_monitor.report()
+        location = report.get('longest_driven_proxy_location')
+        if location is not None:
+            location['joint'] = self.contract.joint_names[location['joint_index']]
+            values = location.pop('context')
+            if values is not None:
+                location.update(handover_bin=int(values[0]), upright_cos=values[1], teacher_step=bool(values[2]),
+                                policy_steps_since_episode_or_handover=int(values[3]))
+        return report
 
     def action_diagnostics(self):
         return self.action_monitor.report()
@@ -408,6 +424,15 @@ class SnailEnv(DirectRLEnv):
         stats['Reward/gated_out_progress'] = (gated_out if learner is None else gated_out * learner).mean().detach()
         if learner is not None:
             self.extras['learner_mask'] = learner
+            # Per-step event counts by handover bin and side; the runner logs each iteration's
+            # mean, so mean x steps-per-iteration recovers the events in that iteration.
+            current = torch.cat((self.handover_counts, self.attempt_truncations[:, :, None]), dim=2)
+            delta = (current - self._logged_counts).float()
+            self._logged_counts.copy_(current)
+            for b, bin_name in enumerate(('official', 'below_0.2', '0.2_to_0.5', 'at_least_0.5')):
+                for s, side_name in enumerate(('left', 'right')):
+                    for c, event in ((0, 'started'), (1, 'completed'), (2, 'stable_get_ups'), (6, 'attempt_truncations')):
+                        stats[f'Handover/{bin_name}_{side_name}_{event}'] = delta[b, s, c]
         self.extras['log'] = {**self.extras.get('log', {}), **stats}
         return sum(self.reward_components.values())
 
@@ -438,8 +463,17 @@ class SnailEnv(DirectRLEnv):
         stable = self.stable_upright_steps >= round(.5 / self.step_dt) + 1
         first_upright = stable & ~self.reached_upright
         self.reached_upright |= stable
-        ended = terminated | timeout
         side = torch.stack((self.initial_side == 1, self.initial_side == 2), dim=1)
+        if self.teacher is not None and self.attempt_steps > 0:
+            # End an unrecovered handover attempt as a time-out so its value is bootstrapped and
+            # ending early cannot pay. Recovered episodes, or ones mid-way through a >=0.8 streak,
+            # continue; official side starts (bin 0) are never truncated by this rule.
+            attempt = ((self.handover_bin > 0) & ~self.reached_upright & (self.stable_upright_steps == 0)
+                       & (self.episode_length_buf >= self.attempt_steps) & ~terminated)
+            timeout = timeout | attempt
+            for b in (1, 2, 3):
+                self.attempt_truncations[b] += (side & (attempt & (self.handover_bin == b))[:, None]).sum(dim=0)
+        ended = terminated | timeout
         events = torch.stack((ended, first_upright, ended & self.reached_upright,
                               ended & fallen_timeout, ended & fallen_timeout & self.reached_upright), dim=1)
         if self.teacher is None:
@@ -500,6 +534,9 @@ class SnailEnv(DirectRLEnv):
             result['bins'][name] = {side: dict(zip(names, values))
                                     for side, values in zip(('left', 'right'), self.handover_counts[b].cpu().tolist())}
         result['prefix_terminations'] = dict(zip(('left', 'right'), self.prefix_terminations.cpu().tolist()))
+        result['attempt_seconds'] = self.attempt_steps * self.step_dt if self.attempt_steps else None
+        result['attempt_truncations'] = {name: dict(zip(('left', 'right'), values)) for name, values
+                                         in zip(bins, self.attempt_truncations.cpu().tolist())}
         return result
 
     def _reset_idx(self, env_ids):

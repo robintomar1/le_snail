@@ -1,0 +1,377 @@
+{
+ "parameters_measured": false,
+ "contact_geometry_validated": false,
+ "physics_dt": 0.005,
+ "stiffness_nm_rad": 12.0,
+ "damping_nm_s_rad": 0.5,
+ "effort_limit_nm": 1.5,
+ "velocity_limit_rad_s": 4.0,
+ "initial_height_m": 0.03,
+ "side_height_m": 0.18,
+ "static_friction_range": [
+  0.35,
+  0.75
+ ],
+ "dynamic_friction_ratio": 0.8,
+ "mass_scale_range": [
+  0.8,
+  1.2
+ ],
+ "gain_scale_range": [
+  0.8,
+  1.2
+ ],
+ "max_action_delay_steps": 1,
+ "position_noise_std_rad": 0.003,
+ "gyro_noise_std_rad_s": 0.02,
+ "gravity_noise_std": 0.01,
+ "drag_force_range_n": [
+  0.05,
+  0.3
+ ],
+ "drag_velocity_scale_m_s": 0.02,
+ "tether_attachment_base_m": [
+  -0.03,
+  0.0,
+  0.05
+ ],
+ "recovery_start_fraction": 0.35,
+ "max_fallen_time_s": 30.0,
+ "protected_points": [],
+ "protected_points_validated": false,
+ "settled_starts": {
+  "upright": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.039472855627536774,
+    0.9558178782463074,
+    -0.0004111308080609888,
+    0.29395607113838196,
+    0.0013960389187559485
+   ],
+   "joint_rad": [
+    0.0014106598682701588,
+    -0.6194220781326294,
+    1.0809744596481323,
+    -0.5362148880958557,
+    0.003298228606581688,
+    0.34972134232521057
+   ]
+  },
+  "left": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.05773790925741196,
+    0.6705037951469421,
+    0.7415876984596252,
+    0.01997608132660389,
+    -0.008564465679228306
+   ],
+   "joint_rad": [
+    0.002013709396123886,
+    -0.6000331044197083,
+    1.1032377481460571,
+    -0.49915096163749695,
+    0.007237274665385485,
+    0.3500300645828247
+   ]
+  },
+  "right": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.05886935442686081,
+    0.6677265167236328,
+    -0.7443643808364868,
+    0.007851768285036087,
+    0.001202095067128539
+   ],
+   "joint_rad": [
+    -0.003763316897675395,
+    -0.6007824540138245,
+    1.1054562330245972,
+    -0.499457985162735,
+    0.0002845333074219525,
+    0.35001492500305176
+   ]
+  }
+ },
+ "settled_start_asset_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+ "settled_start_contract_fingerprint": "10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa",
+ "settled_start_provenance": {
+  "report": "runs/physics-v2-prepare-001/report.json",
+  "report_sha256": "7b06d38da5fca7c8254f995e14e5ebd58ffb8cf5731ea2cace02f1b4a915274b",
+  "meaning": "Nominal physics-v2 rest after20s home hold, zero-velocity reset; xy recentered. Provisional mass/actuators, not physically measured."
+ },
+ "positive_progress_upright_range": [
+  0.5,
+  0.8
+ ],
+ "yaw_cost_weight": 1.0,
+ "side_upright_progress_reward_cap": 1.0,
+ "effort_limit_range_nm": [
+  0.98,
+  2.94
+ ],
+ "velocity_limit_range_rad_s": [
+  3.0,
+  4.7
+ ],
+ "physics_revision": "physics-v2-provisional-001",
+ "base_payload": {
+  "measured": false,
+  "mass_kg": 0.05,
+  "center_m": [
+   -0.03,
+   0.0,
+   0.055
+  ],
+  "box_size_m": [
+   0.07,
+   0.05,
+   0.025
+  ],
+  "estimate_breakdown_kg": {
+   "controller_board": 0.016,
+   "imu_development_board": 0.01,
+   "additional_imu_mount": 0.015,
+   "local_wires_fasteners": 0.009
+  },
+  "basis": "50g provisional sum: controller product listing16g (not weighed bare board); IMU carrier10g, additional mount15g and local wires/fasteners9g are engineering estimates. Existing CAD Waveshare mounting plate already in base is not counted again. Box geometry/COM are estimated, not a collision or protected-clearance model. External tether mass is not added to links; drag model retained.",
+  "sources": [
+   "https://www.waveshare.com/product/modules/motors-servos/bus-servo-adapter-a.htm",
+   "https://www.xsens.com/hubfs/Downloads/Manuals/mti-1-series_DK3_user_manual.pdf"
+  ]
+ },
+ "actuator_provenance": {
+  "source": "https://www.feetechrc.com/525603.html",
+  "variant": "12V ST-3215-C018, user sticker identifies12VSTS3215; detailed suffix not independently measured",
+  "rated_nm": 0.980665,
+  "stall_nm": 2.941995,
+  "no_load_rad_s": 4.717106,
+  "servo_mass_kg": 0.055,
+  "nominal_rationale": "1.5Nm is the lower approved provisional choice between rated and stall;4rad/s below catalog no-load. Independent box limits do not model torque-speed or thermal/current envelope. Not continuous ratings or hardware authorization."
+ },
+ "velocity_constraint_provisional_notes": {
+  "decision_utc": "2026-10-14T13:13:40Z",
+  "coordinator": "LAPTOP; user-approved P\u2192D/W scope",
+  "source_config_sha256": "49521bf5741c0ddda846265098af58a6fa28d02748879a14a0fe7becd57233c8",
+  "physics_changed": false,
+  "semantics": "velocity_limit_sim is a joint velocity constraint. PhysX drive/contact/limit corrections can conflict; observed brief PD-opposing overspeed is provisionally accepted, not a proven physical back-drive model. No artificial clamp.",
+  "evidence": "runs/physics-v2-speed-audit-001; runs/physics-v2-review-001/speed-analysis.json",
+  "monitoring": "Per completed physics step before autoreset: actual per-environment caps, peak absolute joint speed, environment-time fraction over cap+0.001rad/s. Flag >1% time or estimated PD-driven overspeed sustained >=0.05s. PD sign is a proxy, not measured solver torque.",
+  "unvalidated": "Actuator torque-speed/thermal/back-drive properties and contact geometry remain unmeasured; numerical convergence probes do not establish hardware fidelity.",
+  "primary_reference": "https://nvidia-omniverse.github.io/PhysX/physx/5.6.0/docs/Articulations.html"
+ },
+ "handover": {
+  "fraction_of_side_starts": 0.75,
+  "scripts": {
+   "left": [
+    {
+     "id": "p9",
+     "keyframes_rad": [
+      [
+       -0.634547000692233,
+       -1.5692706434324022,
+       0.2262653340572692,
+       -1.0953332839202115,
+       -0.2573696893260543,
+       0.3711005208883703
+      ],
+      [
+       -0.010152588364321258,
+       -1.604703092645227,
+       0.4558377051098218,
+       -1.1841496608041864,
+       -0.8482775972051005,
+       0.9921024505344517
+      ],
+      [
+       0.45455917060649553,
+       0.5869147537955095,
+       0.7480751813528289,
+       -0.37602778506872436,
+       -1.3706232992815681,
+       0.6389554127410684
+      ]
+     ],
+     "prefix_steps": [
+      4,
+      8,
+      12,
+      17,
+      21,
+      25,
+      29,
+      33,
+      37,
+      41,
+      45,
+      50,
+      54
+     ]
+    },
+    {
+     "id": "p34",
+     "keyframes_rad": [
+      [
+       -0.6482101297479218,
+       -1.6564732073448016,
+       0.22677174017793372,
+       -1.151172252525484,
+       -0.2551763204344567,
+       0.4305894032413992
+      ],
+      [
+       -0.149946843749728,
+       -1.609147644191838,
+       0.46256310635997866,
+       -1.134803051376443,
+       -0.8859018346154206,
+       0.8502594687326588
+      ],
+      [
+       0.4389378797053209,
+       0.5365605859685441,
+       0.7044906539715565,
+       -0.3816537988401013,
+       -1.388579538154853,
+       0.6861966875827386
+      ]
+     ],
+     "prefix_steps": [
+      4,
+      9,
+      13,
+      17,
+      21,
+      26,
+      30,
+      34,
+      38,
+      43,
+      47,
+      51,
+      55
+     ]
+    }
+   ],
+   "right": [
+    {
+     "id": "p48",
+     "keyframes_rad": [
+      [
+       0.46178905438664924,
+       -1.1457664072361706,
+       0.28104740956722807,
+       -1.6140111985535992,
+       1.2504994771330251,
+       0.9964304835618863
+      ],
+      [
+       -0.6800651091052572,
+       0.4811689752450428,
+       0.5232942545023567,
+       -0.03356625563233264,
+       1.5242758149964732,
+       0.745200012769403
+      ],
+      [
+       0.18155577147212903,
+       0.1279883880905726,
+       0.8322317287348511,
+       -0.6889261281615044,
+       0.6620210895812775,
+       0.6678918431021338
+      ]
+     ],
+     "prefix_steps": [
+      3,
+      6,
+      10,
+      13,
+      16,
+      19,
+      22,
+      26,
+      29,
+      32,
+      35,
+      38
+     ]
+    },
+    {
+     "id": "p62",
+     "keyframes_rad": [
+      [
+       0.4624909403775981,
+       -1.1888843890733969,
+       0.22634048229678586,
+       -1.570939119298469,
+       1.2676005572885234,
+       1.004686427901956
+      ],
+      [
+       -0.6749605799977823,
+       0.411288380028039,
+       0.6602114734356814,
+       -0.11806282815399852,
+       1.3981997702361055,
+       0.6900702890491888
+      ],
+      [
+       0.2730394298906015,
+       0.14983579792857793,
+       0.9122181050141911,
+       -0.6638726038776881,
+       0.6499475003267522,
+       0.6886472445213546
+      ]
+     ],
+     "prefix_steps": [
+      3,
+      6,
+      10,
+      13,
+      16,
+      19,
+      22,
+      26,
+      29,
+      32,
+      35,
+      38,
+      42
+     ]
+    }
+   ]
+  },
+  "provenance": {
+   "decision": "LAPTOP 2026-10-15T02:36:00Z [DECISION robin] C: handover curriculum, Phase 1 on the 1.0 contract",
+   "base_config": "configs/experiments/physics-v2-002.json",
+   "base_config_sha256": "2025ea21964f07a2685f98cbe3fea3e03d5c3e93770fea87f1b557707d20287b",
+   "sweep_report": "runs/slew-handover-sweep-001/results.json",
+   "sweep_report_sha256": "0bf29334d55cbe98be09e0f1338242a0cec39107faeb3cc271ad73b6bcfd2679",
+   "confirmation": "runs/feasibility-side-recovery-20261014T111801Z/results.json",
+   "confirmation_sha256": "9b65fd5efc174d8fccacb984fb9512333d6b1c0adf67bbbd41d43b892baf8356",
+   "keyframes": "confirmation keys + seed-4242 +-0.1 rad perturbation of each confirmed variant",
+   "eligibility": {
+    "max_passive_get_ups": 0,
+    "max_passive_return": 0.0,
+    "max_passive_shaping_credit": 0.1
+   },
+   "passive_window_s": 3.0,
+   "prefix_steps": "Eligible grid points with k>0 at slew 1.0; k counts teacher policy steps from the reset.",
+   "attempt_seconds": {
+    "decision": "robin, directly in the GPU session ~2026-10-15T03:20Z: \"go ahead with the truncations and see if that helps\"; laptop ACK 03:23:32Z",
+    "base_config": "configs/experiments/handover-001.json",
+    "base_config_sha256": "3e467263d24a8c6aec2bde8fdc3992c54e3846fe6b4c673678caff2b6abb4c25",
+    "meaning": "An unrecovered handover attempt ends as a time-out (value bootstrapped) 3 s after handover unless it reached stable upright or is mid-way through a >=0.8 streak; official side starts are never truncated by this rule.",
+    "basis": "Phase 0 passive window (3 s); the only change from handover-001."
+   }
+  },
+  "attempt_seconds": 3.0
+ }
+}

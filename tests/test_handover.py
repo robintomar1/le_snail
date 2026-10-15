@@ -26,6 +26,33 @@ def write(tmp_path, config):
 
 def test_valid_handover_config_loads(tmp_path):
     assert load_physics(write(tmp_path, handover_config()))['handover']['fraction_of_side_starts'] == .75
+    config = handover_config()
+    config['handover']['attempt_seconds'] = 3.
+    assert load_physics(write(tmp_path, config))['handover']['attempt_seconds'] == 3.
+
+
+@pytest.mark.parametrize('value', [0., -1., float('nan'), float('inf'), True, '3'])
+def test_invalid_attempt_seconds_is_rejected(tmp_path, value):
+    config = handover_config()
+    config['handover']['attempt_seconds'] = value
+    with pytest.raises(ValueError):
+        load_physics(write(tmp_path, config))
+
+
+def test_longest_driven_streak_records_its_location_and_context():
+    torch = pytest.importorskip('torch')
+    from le_snail.speed import PhysicsSpeedDiagnostics
+    monitor = PhysicsSpeedDiagnostics(2, 2, .005, 'cpu')
+    limits = torch.full((2, 2), 4.)
+    context = torch.tensor([[0., .1], [2., .4]])
+    driven = torch.tensor([[0., 0.], [5., 0.]])
+    for _ in range(3):
+        monitor.update(driven, limits, torch.ones(2, 2), context=context)
+    monitor.update(torch.zeros(2, 2), limits, torch.ones(2, 2), context=context)
+    report = monitor.report()
+    assert report['longest_driven_proxy_over_limit_s'] == pytest.approx(.015)
+    assert report['longest_driven_proxy_location'] == {'env': 1, 'joint_index': 0, 'physics_sample': 3, 'context': [2., pytest.approx(.4)]}
+    assert PhysicsSpeedDiagnostics(1, 1, .005, 'cpu').report()['longest_driven_proxy_location'] is None
 
 
 @pytest.mark.parametrize('change', ['zero_fraction', 'excess_fraction', 'missing_side', 'empty_side', 'short_keys',

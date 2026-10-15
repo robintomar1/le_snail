@@ -23,6 +23,7 @@ p.add_argument('--checkpoint', default='runs/recover-shaped-051-100/model_final.
 p.add_argument('--crawl-policy', default='runs/recover-shaped-051-100/exported/policy.pt')
 p.add_argument('--sweep', default='runs/slew-handover-sweep-001/results.json')
 p.add_argument('--rollout-windows', type=int, default=3)
+p.add_argument('--validation-fraction', type=float, default=1., help='Share of side starts handed over in the rollout checks')
 AppLauncher.add_app_launcher_args(p)
 args = p.parse_args()
 if args.output.exists():
@@ -44,7 +45,7 @@ try:
     N, STEPS = 64, 64
     base = json.loads(Path(args.config).read_text())
     validation = dict(base, recovery_start_fraction=1.)
-    validation['handover'] = dict(base['handover'], fraction_of_side_starts=1.)
+    validation['handover'] = dict(base['handover'], fraction_of_side_starts=args.validation_fraction)
     validation_path = args.output / 'validation-config.json'
     validation_path.write_text(json.dumps(validation, indent=1) + '\n')
     cfg = make_config(args.asset, args.contract, validation_path, num_envs=N, stage='recover',
@@ -69,7 +70,7 @@ try:
               'provenance': {str(f): file_hash(f) for f in (args.config, args.asset, args.contract, args.checkpoint,
                                                             args.crawl_policy, args.sweep, __file__,
                                                             'src/le_snail/sim/env.py', 'src/le_snail/masked_ppo.py')},
-              'validation_config': 'Derived from --config with every reset a side start that uses a teacher prefix.',
+              'validation_config': f'Derived from --config: every reset a side start; {args.validation_fraction:g} of them use a teacher prefix.',
               'checks': {}}
 
     def check(name, ok, **details):
@@ -92,7 +93,10 @@ try:
     assigned = env.handover_prefix.clone()
     handed_previous = torch.zeros(N, dtype=torch.bool, device=device)
     stats = {'teacher_steps': 0, 'learner_steps': 0, 'handovers': 0, 'prefix_length_matches': 0,
-             'handover_cos': [], 'assignments': {}}
+             'handover_cos': [], 'assignments': {}, 'attempt_steps': env.attempt_steps, 'attempt_truncations': 0}
+    logged = torch.zeros((4, 2, 7), device=device)
+    bin_names, side_names = ('official', 'below_0.2', '0.2_to_0.5', 'at_least_0.5'), ('left', 'right')
+    event_columns = ((0, 'started'), (1, 'completed'), (2, 'stable_get_ups'), (6, 'attempt_truncations'))
     with torch.inference_mode():
         for window in range(args.rollout_windows):
             recorded = []
@@ -109,11 +113,30 @@ try:
                 teacher = env.teacher_left > 0
                 new_episode = env.episode_length_buf == 0
                 assigned = torch.where(new_episode & teacher, env.handover_prefix, assigned)
+                bin_before, reached_before = env.handover_bin.clone(), env.reached_upright.clone()
+                length_before, side_before = env.episode_length_buf.clone(), env.initial_side.clone()
                 actions = alg.act(obs)
                 count_before = int(network.actor_obs_normalizer.count)
                 obs, rewards, dones, extras = wrapper.step(actions.to(env.device))
                 obs, rewards, dones = obs.to(device), rewards.to(device), dones.to(device)
                 mask = extras['learner_mask']
+                for b, bin_name in enumerate(bin_names):
+                    for s, side_name in enumerate(side_names):
+                        for c, event in event_columns:
+                            logged[b, s, c] += float(extras['log'][f'Handover/{bin_name}_{side_name}_{event}'])
+                if env.attempt_steps > 0:
+                    ended, time_outs = dones > 0, extras['time_outs'].to(device).bool()
+                    truncated = ended & time_outs & (bin_before > 0)
+                    stats['attempt_truncations'] += int(truncated.sum())
+                    check('attempt_truncation_is_unrecovered_time_out',
+                          bool((~reached_before[truncated]).all() and (length_before[truncated] + 1 >= env.attempt_steps).all()),
+                          window=window, step=step)
+                    official = ended & time_outs & (bin_before == 0) & (side_before > 0)
+                    check('official_side_starts_not_truncated',
+                          bool((length_before[official] + 1 >= env.max_episode_length).all()), window=window, step=step)
+                    open_attempt = ~ended & (env.handover_bin > 0) & ~env.reached_upright & (env.stable_upright_steps == 0)
+                    check('no_overlong_unrecovered_attempt', bool((env.episode_length_buf[open_attempt] < env.attempt_steps).all()),
+                          window=window, step=step)
                 check('learner_mask_matches_teacher_steps', bool(torch.equal(mask, (~teacher).float())), window=window, step=step)
                 check('teacher_reward_exactly_zero', bool((rewards[teacher] == 0).all()), window=window, step=step)
                 components_zero = all(bool((value[teacher] == 0).all()) for value in env.reward_components.values())
@@ -164,6 +187,10 @@ try:
             alg.storage.clear()  # Discard the rollout: zero training.
             save()
     check('teacher_and_learner_steps_present', stats['teacher_steps'] > 0 and stats['learner_steps'] > 0 and stats['handovers'] > 0)
+    columns = [c for c, _ in event_columns]
+    check('per_step_log_sums_to_counters', bool(torch.equal(logged[:, :, columns], env._logged_counts[:, :, columns].float())))
+    if env.attempt_steps > 0:
+        check('attempt_truncations_observed', stats['attempt_truncations'] > 0, truncations=stats['attempt_truncations'])
     check('every_variant_assigned', set(stats['assignments']) == set(env.teacher['names']), seen=sorted(stats['assignments']))
     unchanged = all(torch.equal(network.state_dict()[k], v) for k, v in initial_parameters.items())
     check('no_parameter_update', unchanged)
@@ -190,9 +217,11 @@ try:
         table['points'] = torch.tensor(lengths, device=device)[:, None]
         table['counts'] = torch.ones(len(lengths), dtype=torch.long, device=device)
         full_lengths[side] = lengths
+    env.teacher['fraction'] = 1.  # Reproduction concerns the teacher itself; every reset gets one.
     with torch.inference_mode():
         observations, _ = env.reset()
         start = env.robot.data.root_pos_w.clone()
+        check('reproduction_every_env_has_teacher', bool((env.handover_prefix > 0).all()))
         sides = ['left' if int(s) == 1 else 'right' for s in env.initial_side.tolist()]
         trials = [Trial(kind=side) for side in sides]
         alive = torch.ones(N, dtype=torch.bool, device=device)
@@ -201,7 +230,9 @@ try:
             actions = crawl(observations['policy'])
             live = alive.clone()
             was_teacher = env.teacher_left > 0
+            recovered_before = env.reached_upright.clone()
             observations, _, terminated, truncated, _ = env.step(actions)
+            check('recovered_handover_not_truncated', not bool((truncated & recovered_before & live).any()), step=step)
             script_completed |= was_teacher & (env.teacher_key_i > 3)
             pos, gravity, _ = env.last_transition
             disp = (pos - start).cpu().numpy()
