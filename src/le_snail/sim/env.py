@@ -254,13 +254,14 @@ class SnailEnv(DirectRLEnv):
 
     def _advance_teacher(self, teacher_actions):
         # Same keyframe sequencing as the feasibility probe: advance once the slewed target
-        # reaches the clipped goal and holds (2 steps; 20 at the final home keyframe).
+        # reaches the clipped goal and holds (0.1 s; 1 s at the final home keyframe).
         active = self.teacher_step
         clipped = torch.clamp(self.home + teacher_actions * self.scale, self.lower, self.upper)
         reached = (self.target - clipped).abs().amax(dim=1) < 1e-3
         running = active & (self.teacher_key_i <= 3)
         self.teacher_held = torch.where(reached & running, self.teacher_held + 1, 0)
-        advance = running & (self.teacher_held >= torch.where(self.teacher_key_i == 3, 20, 2))
+        hold = torch.where(self.teacher_key_i == 3, round(1. / self.step_dt), round(.1 / self.step_dt))
+        advance = running & (self.teacher_held >= hold)
         self.teacher_key_i += advance.long()
         self.teacher_held = torch.where(advance, 0, self.teacher_held)
         self.teacher_left -= active.long()

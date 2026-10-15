@@ -136,7 +136,7 @@ try:
             reached = (env.target - clipped).abs().amax(dim=1) < 1e-3
             moving = self.running() & mask
             self.held = torch.where(reached & moving, self.held + 1, 0)
-            advance = moving & (self.held >= torch.where(self.key_i == 3, 20, 2))
+            advance = moving & (self.held >= torch.where(self.key_i == 3, round(1. / dt), round(.1 / dt)))
             self.key_i += advance.long()
             self.held = torch.where(advance, 0, self.held)
             return advance & (self.key_i > 3)

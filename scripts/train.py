@@ -24,8 +24,14 @@ AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 if args.iterations < 1 or args.num_envs < 1:
     parser.error('Iterations and environment count must be positive')
-if args.num_mini_batches < 1 or (args.num_envs * 64) % args.num_mini_batches:
-    parser.error('--num-mini-batches must be positive and divide num-envs * 64')
+import json as _json
+# PPO horizons are defined in seconds at the original 20 Hz settings (3.2 s rollouts, gamma .995 and
+# lambda .95 per 50 ms); scale them so a different policy rate keeps the same time horizons.
+_rate = _json.loads(Path(args.contract).read_text())['policy_hz'] / 20.
+STEPS_PER_ENV = round(64 * _rate)
+GAMMA, LAM = .995 ** (1 / _rate), .95 ** (1 / _rate)
+if args.num_mini_batches < 1 or (args.num_envs * STEPS_PER_ENV) % args.num_mini_batches:
+    parser.error(f'--num-mini-batches must be positive and divide num-envs * {STEPS_PER_ENV}')
 if args.save_interval < 1:
     parser.error('--save-interval must be positive')
 if args.output.exists():
@@ -69,7 +75,7 @@ try:
     source = Path(args.asset).parent / 'source.json'
     shutil.copy2(source, run / 'asset.source.json')
     config = {
-        'seed': args.seed, 'device': device, 'num_steps_per_env': 64,
+        'seed': args.seed, 'device': device, 'num_steps_per_env': STEPS_PER_ENV,
         'save_interval': args.save_interval, 'logger': 'tensorboard', 'obs_groups': {'policy': ['policy'], 'critic': ['policy']},
         'policy': {'class_name': 'ActorCritic', 'init_noise_std': 0.5,
                    'actor_obs_normalization': True, 'critic_obs_normalization': True,
@@ -77,7 +83,7 @@ try:
         'algorithm': {'class_name': 'PPO', 'value_loss_coef': 1., 'use_clipped_value_loss': True,
                       'clip_param': 0.2, 'entropy_coef': 0.01, 'num_learning_epochs': 5,
                       'num_mini_batches': args.num_mini_batches, 'learning_rate': 3e-4, 'schedule': 'adaptive',
-                      'gamma': 0.995, 'lam': 0.95, 'desired_kl': 0.01, 'max_grad_norm': 1.},
+                      'gamma': GAMMA, 'lam': LAM, 'desired_kl': 0.01, 'max_grad_norm': 1.},
     }
     handover = 'handover' in json.loads(Path(args.physics).read_text())
     if handover:
