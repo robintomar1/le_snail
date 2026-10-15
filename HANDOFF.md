@@ -15,6 +15,13 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### PAUSED 2026-10-14 by robin; CPU-only video request 2026-10-15
+
+- Laptop relayed robin's14:59:33 UTC instruction to pause ALL GPU work because the machine is needed by another user. This supersedes prior experiment launch authority. No new Kit, training, evaluation or GPU rendering until an explicit resume decision. The monitor verified no Le Snail GPU processes at15:00:15 and entered idle; tail logging may remain. Do not claim active agent polling while it is idle.
+- On2026-10-15 robin requested videos of the scripted64/64 recovery result. Original tests were headless. Current work is CPU-only offline visualization of saved root poses/joint angles from the successful scripted repeats in `runs/demo-dataset-v2-001`; no new simulation/GPU work or training. Output `runs/scripted-recovery-videos-20261015-001`. These are recorded scripted trajectories, not learned recovery or hardware footage.
+- Frozen v1/v2 candidates, wide/current50 checkpoints, hashes and open D/W stop decisions remain as recorded below. Last implementation commit44129c3. Previous study/dataset and wide-speed stop gates remain in force independently of this machine-wide pause.
+
+
 ### D dataset rejected; W first50 complete and stopped for speed review
 
 - **No D training was launched.** `runs/demo-dataset-review-001/review.json` and `runs/demo-dataset-validation-001/validation.json` record the failed preregistered ambiguity gate. All four scripted paths passed both repeats and timing/history/slew/settling checks passed, but nearly identical actor24 observations can receive materially different next applied commands (initial variant choice and timed handoff). The near-neighbor criterion is conservative and also flags some same-frozen-policy pairs; this does not prove actor24 cannot learn recovery. No filtering workaround, threshold relaxation, hidden observation or PPO demonstration hook was introduced. Proposed next teacher redesign is **not authorized** by the old dataset-gated GO.
