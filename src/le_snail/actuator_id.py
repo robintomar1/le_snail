@@ -193,3 +193,23 @@ def step_metrics(t, pos, t_cmd, goal, t_end, settle_s=0.2, move_ticks=2):
             'dead_time_s': first(np.abs(pos[window] - start) >= move_ticks),
             'rise_10_90_s': first(x >= 0.9) - first(x >= 0.1), 'time_to_90_s': first(x >= 0.9),
             'overshoot': max(0.0, float(x.max()) - 1), 'final_error_ticks': final - goal}
+
+
+def frequency_response(t_in, u, t_out, y, bands, dt=0.005):
+    """Band-averaged transfer u -> y from one excitation record (e.g. a chirp), on a uniform resampling.
+
+    Each band's estimate is sum(Y conj(U)) / sum(|U|^2) over its FFT bins; delay is -phase / (2 pi f_mid),
+    so it is meaningful only while the phase lag stays under half a turn.
+    """
+    t = np.arange(max(t_in[0], t_out[0]), min(t_in[-1], t_out[-1]), dt)
+    u = np.interp(t, t_in, u) - np.mean(u)
+    y = np.interp(t, t_out, y) - np.mean(y)
+    U, Y, f = np.fft.rfft(u), np.fft.rfft(y), np.fft.rfftfreq(len(t), dt)
+    result = []
+    for lo, hi in bands:
+        b = (f >= lo) & (f < hi)
+        h = np.sum(Y[b] * np.conj(U[b])) / np.sum(np.abs(U[b]) ** 2)
+        mid = (lo + hi) / 2
+        result.append({'f_hz': mid, 'gain': float(np.abs(h)), 'phase_deg': float(np.degrees(np.angle(h))),
+                       'delay_s': float(-np.angle(h) / (2 * np.pi * mid))})
+    return result

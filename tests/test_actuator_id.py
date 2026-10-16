@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from le_snail.actuator_id import (
-    EnvelopeMonitor, SafetyLimits, abort_reason, chirp, closest_recent_goal, plan_motion, step_metrics, decode_state, hold_then, joint_window, ramp, rate_summary, steps,
+    EnvelopeMonitor, SafetyLimits, abort_reason, chirp, closest_recent_goal, frequency_response, plan_motion, step_metrics, decode_state, hold_then, joint_window, ramp, rate_summary, steps,
 )
 from le_snail.servo_bus import STATE_BLOCK
 
@@ -152,3 +152,13 @@ def test_step_metrics_recover_delay_rise_and_final_error_of_a_synthetic_servo():
     assert m['final_error_ticks'] == pytest.approx(short, abs=1)
     assert m['overshoot'] == 0
     assert m['start_ticks'] == start and m['step_ticks'] == goal - start
+
+
+def test_frequency_response_recovers_gain_and_delay_of_a_chirp():
+    t = np.arange(0, 12, 0.003)
+    chirp_at = lambda s: np.sin(2 * np.pi * (0.2 * s + 1.8 * s ** 2 / 20))
+    u, y = 50 * chirp_at(t), 0.8 * 50 * chirp_at(np.clip(t - 0.06, 0, None))
+    bands = frequency_response(t, u, t, y, bands=[(0.4, 0.6), (0.9, 1.1), (1.6, 1.8)])
+    for band in bands:
+        assert band['gain'] == pytest.approx(0.8, abs=0.03)
+        assert band['phase_deg'] == pytest.approx(-360 * band['f_hz'] * 0.06, abs=1.5)  # few FFT bins per low band

@@ -13,9 +13,10 @@ import math
 
 import numpy as np
 
-from le_snail.actuator_id import TICKS_PER_RAD, decode_state, step_metrics
+from le_snail.actuator_id import TICKS_PER_RAD, decode_state, frequency_response, step_metrics
 
 DEG_PER_TICK = 360 / 4096
+BANDS = [(0.3, 0.5), (0.5, 0.7), (0.7, 0.9), (0.9, 1.2), (1.2, 1.5), (1.5, 1.8), (1.8, 2.0)]
 NAMES = {1: 'shoulder_pan', 2: 'shoulder_lift', 3: 'elbow_flex', 4: 'wrist_flex', 5: 'wrist_roll'}
 
 
@@ -58,8 +59,38 @@ def steps(run):
     return joint, [(i, changes[n + 1] if n + 1 < len(changes) else len(cmd)) for n, i in enumerate(changes)], first
 
 
+def chirp_report(run, stem):
+    """Command -> encoder and (for joints the forearm IMU sees) encoder -> IMU, per frequency band."""
+    meta, cmd, cmd_t, t, pos = run['meta'], run['cmd'], run['cmd_t'], run['t'], run['pos']
+    period = float(np.median(np.diff(cmd_t)))
+    first = round(meta['ramp_s'] / period) + 1
+    joint = int(np.argmax(np.ptp(cmd[first:], axis=0)))
+    moving = np.flatnonzero(np.diff(cmd[first:, joint]) != 0) + first
+    t_lo, t_hi = cmd_t[moving[0]], cmd_t[moving[-1]]
+    c = (cmd_t >= t_lo) & (cmd_t <= t_hi)
+    w = (t >= t_lo) & (t <= t_hi)
+    sid = run['ids'][joint]
+    print(f'\n## {stem.split("/")[-1]}: {NAMES.get(sid, sid)} (id {sid}) chirp; abort {meta["abort"]}, '
+          f'{meta["summary"]["rate_hz"]:.0f} Hz, lost {meta["summary"]["lost_replies"]}, command +/-{np.ptp(cmd[c, joint]) / 2 * DEG_PER_TICK:.1f} deg, '
+          f'peak |load| {np.abs(run["load"][w, joint]).max():.0f}, temperature {np.median(run["temp"][-50:], 0).astype(int).tolist()} C')
+    # Goals are held between writes; shifting the samples by half a period makes linear interpolation match that hold.
+    servo = frequency_response(cmd_t[c] + period / 2, cmd[c, joint], t[w], pos[w, joint], BANDS)
+    link = None
+    if run['imu'] is not None and sid in (2, 3) and {2, 3} <= set(run['ids']):
+        ti, pitch = run['imu']
+        chain = (pos[:, run['ids'].index(2)] + pos[:, run['ids'].index(3)]) * DEG_PER_TICK
+        wi = (ti >= t_lo) & (ti <= t_hi)
+        link = frequency_response(t[w], -chain[w], ti[wi], pitch[wi], BANDS)
+    print(' f(Hz)  enc/cmd gain  phase(deg)  delay(ms)' + ('  |  imu/enc gain  phase(deg)' if link else ''))
+    for n, b in enumerate(servo):
+        extra = f'  |  {link[n]["gain"]:12.2f}  {link[n]["phase_deg"]:10.1f}' if link else ''
+        print(f' {b["f_hz"]:5.2f}  {b["gain"]:12.2f}  {b["phase_deg"]:10.1f}  {b["delay_s"] * 1e3:9.0f}{extra}')
+
+
 def report(stem):
     run = load(stem)
+    if run['meta']['motion'].startswith('chirp'):
+        return chirp_report(run, stem)
     joint, segments, first = steps(run)
     sid = run['ids'][joint]
     t, pos = run['t'], run['pos']
