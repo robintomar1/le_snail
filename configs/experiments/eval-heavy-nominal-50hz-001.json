@@ -1,0 +1,176 @@
+{
+ "parameters_measured": false,
+ "contact_geometry_validated": false,
+ "physics_dt": 0.005,
+ "stiffness_nm_rad": 12.0,
+ "damping_nm_s_rad": 0.5,
+ "effort_limit_nm": 1.5,
+ "velocity_limit_rad_s": 4.0,
+ "initial_height_m": 0.03,
+ "side_height_m": 0.18,
+ "static_friction_range": [
+  0.55,
+  0.55
+ ],
+ "dynamic_friction_ratio": 0.8,
+ "mass_scale_range": [
+  1.2,
+  1.2
+ ],
+ "gain_scale_range": [
+  1.0,
+  1.0
+ ],
+ "max_action_delay_steps": 0,
+ "position_noise_std_rad": 0.0,
+ "gyro_noise_std_rad_s": 0.0,
+ "gravity_noise_std": 0.0,
+ "drag_force_range_n": [
+  0.0,
+  0.0
+ ],
+ "drag_velocity_scale_m_s": 0.02,
+ "tether_attachment_base_m": [
+  -0.03,
+  0.0,
+  0.05
+ ],
+ "recovery_start_fraction": 0.35,
+ "max_fallen_time_s": 30.0,
+ "protected_points": [],
+ "protected_points_validated": false,
+ "settled_starts": {
+  "upright": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.039472855627536774,
+    0.9558178782463074,
+    -0.0004111308080609888,
+    0.29395607113838196,
+    0.0013960389187559485
+   ],
+   "joint_rad": [
+    0.0014106598682701588,
+    -0.6194220781326294,
+    1.0809744596481323,
+    -0.5362148880958557,
+    0.003298228606581688,
+    0.34972134232521057
+   ]
+  },
+  "left": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.05773790925741196,
+    0.6705037951469421,
+    0.7415876984596252,
+    0.01997608132660389,
+    -0.008564465679228306
+   ],
+   "joint_rad": [
+    0.002013709396123886,
+    -0.6000331044197083,
+    1.1032377481460571,
+    -0.49915096163749695,
+    0.007237274665385485,
+    0.3500300645828247
+   ]
+  },
+  "right": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.05886935442686081,
+    0.6677265167236328,
+    -0.7443643808364868,
+    0.007851768285036087,
+    0.001202095067128539
+   ],
+   "joint_rad": [
+    -0.003763316897675395,
+    -0.6007824540138245,
+    1.1054562330245972,
+    -0.499457985162735,
+    0.0002845333074219525,
+    0.35001492500305176
+   ]
+  }
+ },
+ "settled_start_asset_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+ "settled_start_contract_fingerprint": "4f23c9185ab0b7255e21837c300078f951c026891190e5b9b0fbe713c3cab12c",
+ "settled_start_provenance": {
+  "report": "runs/physics-v2-prepare-001/report.json",
+  "report_sha256": "7b06d38da5fca7c8254f995e14e5ebd58ffb8cf5731ea2cace02f1b4a915274b",
+  "meaning": "Nominal physics-v2 rest after20s home hold, zero-velocity reset; xy recentered. Provisional mass/actuators, not physically measured."
+ },
+ "positive_progress_upright_range": [
+  0.5,
+  0.8
+ ],
+ "yaw_cost_weight": 1.0,
+ "side_upright_progress_reward_cap": 1.0,
+ "effort_limit_range_nm": [
+  1.5,
+  1.5
+ ],
+ "velocity_limit_range_rad_s": [
+  4.0,
+  4.0
+ ],
+ "physics_revision": "physics-v2-provisional-001",
+ "base_payload": {
+  "measured": false,
+  "mass_kg": 0.05,
+  "center_m": [
+   -0.03,
+   0.0,
+   0.055
+  ],
+  "box_size_m": [
+   0.07,
+   0.05,
+   0.025
+  ],
+  "estimate_breakdown_kg": {
+   "controller_board": 0.016,
+   "imu_development_board": 0.01,
+   "additional_imu_mount": 0.015,
+   "local_wires_fasteners": 0.009
+  },
+  "basis": "50g provisional sum: controller product listing16g (not weighed bare board); IMU carrier10g, additional mount15g and local wires/fasteners9g are engineering estimates. Existing CAD Waveshare mounting plate already in base is not counted again. Box geometry/COM are estimated, not a collision or protected-clearance model. External tether mass is not added to links; drag model retained.",
+  "sources": [
+   "https://www.waveshare.com/product/modules/motors-servos/bus-servo-adapter-a.htm",
+   "https://www.xsens.com/hubfs/Downloads/Manuals/mti-1-series_DK3_user_manual.pdf"
+  ]
+ },
+ "actuator_provenance": {
+  "source": "https://www.feetechrc.com/525603.html",
+  "variant": "12V ST-3215-C018, user sticker identifies12VSTS3215; detailed suffix not independently measured",
+  "rated_nm": 0.980665,
+  "stall_nm": 2.941995,
+  "no_load_rad_s": 4.717106,
+  "servo_mass_kg": 0.055,
+  "nominal_rationale": "1.5Nm is the lower approved provisional choice between rated and stall;4rad/s below catalog no-load. Independent box limits do not model torque-speed or thermal/current envelope. Not continuous ratings or hardware authorization."
+ },
+ "velocity_constraint_provisional_notes": {
+  "decision_utc": "2026-10-14T13:13:40Z",
+  "coordinator": "LAPTOP; user-approved P\u2192D/W scope",
+  "source_config_sha256": "49521bf5741c0ddda846265098af58a6fa28d02748879a14a0fe7becd57233c8",
+  "physics_changed": false,
+  "semantics": "velocity_limit_sim is a joint velocity constraint. PhysX drive/contact/limit corrections can conflict; observed brief PD-opposing overspeed is provisionally accepted, not a proven physical back-drive model. No artificial clamp.",
+  "evidence": "runs/physics-v2-speed-audit-001; runs/physics-v2-review-001/speed-analysis.json",
+  "monitoring": "Per completed physics step before autoreset: actual per-environment caps, peak absolute joint speed, environment-time fraction over cap+0.001rad/s. Flag >1% time or estimated PD-driven overspeed sustained >=0.05s. PD sign is a proxy, not measured solver torque.",
+  "unvalidated": "Actuator torque-speed/thermal/back-drive properties and contact geometry remain unmeasured; numerical convergence probes do not establish hardware fidelity.",
+  "primary_reference": "https://nvidia-omniverse.github.io/PhysX/physx/5.6.0/docs/Articulations.html"
+ },
+ "policy_rate_50hz_provenance": {
+  "decision": "robin, directly in the GPU session 2026-10-15 ~04:30 UTC: \"change the rate of policy to 50 hz\"",
+  "base_config": "configs/experiments/physics-v2-002.json",
+  "base_config_sha256": "2025ea21964f07a2685f98cbe3fea3e03d5c3e93770fea87f1b557707d20287b",
+  "settled_starts": "Same rest states (20 s home hold; rate-independent once settled), re-bound from contract 10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa to the 50 Hz contract. Passive stillness at 50 Hz is re-checked by the hold batches of the next zero-training run.",
+  "action_delay": "max_action_delay_steps stays 1 step, now 20 ms instead of 50 ms; real latency is still unmeasured."
+ },
+ "override_note": "Evaluation override (#14): nominal point, but every link mass and inertia x1.20 (measured arm ~20% heavier than the CAD links; laptop 16:05:52Z)."
+}

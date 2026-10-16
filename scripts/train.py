@@ -19,6 +19,7 @@ parser.add_argument('--save-interval', type=int, default=100)
 parser.add_argument('--seed', type=int, default=42)
 parser.add_argument('--resume', type=Path)
 parser.add_argument('--handover-state', type=Path, help='handover-state.json from a previous chunk: restores the curriculum frontier')
+parser.add_argument('--entropy-coef', type=float, default=0.01, help='PPO entropy bonus (default 0.01, as in all runs before #15)')
 parser.add_argument('--output', type=Path, required=True)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
@@ -81,7 +82,7 @@ try:
                    'actor_obs_normalization': True, 'critic_obs_normalization': True,
                    'actor_hidden_dims': [128, 128], 'critic_hidden_dims': [128, 128], 'activation': 'elu'},
         'algorithm': {'class_name': 'PPO', 'value_loss_coef': 1., 'use_clipped_value_loss': True,
-                      'clip_param': 0.2, 'entropy_coef': 0.01, 'num_learning_epochs': 5,
+                      'clip_param': 0.2, 'entropy_coef': args.entropy_coef, 'num_learning_epochs': 5,
                       'num_mini_batches': args.num_mini_batches, 'learning_rate': 3e-4, 'schedule': 'adaptive',
                       'gamma': GAMMA, 'lam': LAM, 'desired_kl': 0.01, 'max_grad_norm': 1.},
     }

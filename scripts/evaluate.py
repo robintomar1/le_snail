@@ -81,6 +81,8 @@ try:
             # Settling is excluded from both the trial clock and the maximum
             # fallen duration; otherwise side trials can stop at ~28 seconds.
             env.fallen_time.zero_()
+            if hasattr(policy, 'reset'):
+                policy.reset()  # Stateful scripted controllers (#14); learned policies have no reset.
             previous_yaw = base_yaw(env.robot.data.root_quat_w[0])
             yaw_from_start = 0.
             trial = Trial(kind=kind)
@@ -116,7 +118,11 @@ try:
                     trial.update(elapsed, float(displacement[0]), float(displacement[1]), upright, fault=bool(term[0]))
                     trace.write(json.dumps({'time_s': elapsed, 'forward_m': float(displacement[0]), 'lateral_m': float(displacement[1]), 'upright_cos': upright,
                                             'base_yaw_rad': yaw, 'yaw_from_start_rad': yaw_from_start,
-                                            'terminated': bool(term[0]), 'truncated': bool(trunc[0])}) + '\n')
+                                            'terminated': bool(term[0]), 'truncated': bool(trunc[0]),
+                                            # Pose before any auto-reset; joints are read after the step (reset values on a terminal step).
+                                            'root_pos_w': (pos[0] - env.scene.env_origins[0]).tolist(),
+                                            'root_quat_w': env.last_transition_quat[0].tolist(),
+                                            'joint_pos_rad': env.robot.data.joint_pos[0, env.joint_ids].tolist()}) + '\n')
                     if writer is not None:
                         frame = env.terminal_frame if bool(term[0] or trunc[0]) else env.render()
                         if frame is not None:
