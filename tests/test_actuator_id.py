@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from le_snail.actuator_id import (
-    SafetyLimits, abort_reason, chirp, closest_recent_goal, plan_motion, decode_state, hold_then, joint_window, ramp, rate_summary, steps,
+    EnvelopeMonitor, SafetyLimits, abort_reason, chirp, closest_recent_goal, plan_motion, decode_state, hold_then, joint_window, ramp, rate_summary, steps,
 )
 from le_snail.servo_bus import STATE_BLOCK
 
@@ -117,3 +117,24 @@ def test_plan_rejects_a_start_pose_or_offsets_outside_the_window_and_a_nonzero_f
         plan_motion(np.array([2000]), np.array([2900]), np.array([[0], [20]]), **window)
     with pytest.raises(ValueError, match='zero'):
         plan_motion(np.array([2000]), np.array([2000]), np.array([[5]]), **window)
+
+
+def test_monitor_ignores_single_sample_temperature_and_voltage_spikes():
+    monitor = EnvelopeMonitor(LIMITS)
+    for k in range(3 * LIMITS.slow_signal_window):
+        spike = k % LIMITS.slow_signal_window == 7
+        states = {2: decode_state(block(temperature=58 if spike else 33, voltage=99 if spike else 121))}
+        assert monitor.check(states) is None
+
+
+def test_monitor_aborts_on_persistent_overheat_within_one_window():
+    monitor = EnvelopeMonitor(LIMITS)
+    reasons = [monitor.check({2: decode_state(block(temperature=60))}) for _ in range(LIMITS.slow_signal_window)]
+    assert reasons[:-1] == [None] * (LIMITS.slow_signal_window - 1)
+    assert 'temperature' in reasons[-1] and 'id 2' in reasons[-1]
+
+
+def test_monitor_keeps_fast_checks_instant():
+    monitor = EnvelopeMonitor(LIMITS)
+    assert 'load' in monitor.check({1: decode_state(block(load=950))})
+    assert 'status' in EnvelopeMonitor(LIMITS).check({1: decode_state(block(status=0x20))})

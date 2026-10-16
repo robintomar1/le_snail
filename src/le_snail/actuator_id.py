@@ -6,6 +6,7 @@ the load/current thresholds below are provisional and must be reviewed before th
 """
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 
 import numpy as np
@@ -41,6 +42,7 @@ class SafetyLimits:
     max_tracking_error_ticks: int = round(0.35 * TICKS_PER_RAD)  # hardware config max_tracking_error_rad
     max_consecutive_lost: int = 5
     max_start_drift_ticks: int = round(0.15 * TICKS_PER_RAD)  # hardware config start_tolerance_rad
+    slow_signal_window: int = 25           # samples per servo (~50 ms) for the temperature/voltage median
 
 
 def abort_reason(states, limits, goals=None, consecutive_lost=0):
@@ -62,6 +64,32 @@ def abort_reason(states, limits, goals=None, consecutive_lost=0):
         if goals and servo_id in goals and abs(s['position'] - goals[servo_id]) > limits.max_tracking_error_ticks:
             return f'id {servo_id}: tracking error {s["position"] - goals[servo_id]} ticks'
     return None
+
+
+class EnvelopeMonitor:
+    """abort_reason over a stream of cycles, with temperature and voltage judged on a rolling median.
+
+    STS3215 reads show single-sample spikes (temperature up to +25 C, voltage down ~1.4 V) in ~0.5 % of
+    samples per servo even with torque off (#12 hold run of 2026-10-16 aborted on one 58 C sample).
+    Real heating and supply sag are far slower than the window, so they still trip it within ~50 ms;
+    load, current, status, tracking and lost feedback stay per-sample.
+    """
+    def __init__(self, limits):
+        self.limits, self.history = limits, {}
+
+    def check(self, states, goals=None, consecutive_lost=0):
+        judged = {}
+        for servo_id, s in states.items():
+            window = self.limits.slow_signal_window
+            temperatures, voltages = self.history.setdefault(servo_id, (deque(maxlen=window), deque(maxlen=window)))
+            temperatures.append(s['temperature_c'])
+            voltages.append(s['voltage_v'])
+            if len(temperatures) < window:  # no slow-signal verdict until the window fills
+                judged[servo_id] = dict(s, temperature_c=0, voltage_v=self.limits.voltage_range_v[0])
+            else:  # odd window: the middle element is the median
+                judged[servo_id] = dict(s, temperature_c=sorted(temperatures)[window // 2],
+                                        voltage_v=sorted(voltages)[window // 2])
+        return abort_reason(judged, self.limits, goals, consecutive_lost)
 
 
 def _stats(values_ms):

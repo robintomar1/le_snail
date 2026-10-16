@@ -31,7 +31,7 @@ import time
 import numpy as np
 
 from le_snail.actuator_id import (
-    SafetyLimits, abort_reason, closest_recent_goal, decode_state, joint_window, plan_motion, rate_summary,
+    EnvelopeMonitor, SafetyLimits, closest_recent_goal, decode_state, joint_window, plan_motion, rate_summary,
 )
 from le_snail.servo_bus import STATE_BLOCK, STS3215_REGISTERS, ServoBus, dump_servos, open_bus_port
 
@@ -81,7 +81,7 @@ def plan(present, start_ticks, offsets, lower, upper, ramp_s, rate_hz):
 class Recorder:
     """Bus cycles, commands and start-up writes of one run, with the envelope check per cycle."""
     def __init__(self, bus, ids, limits):
-        self.bus, self.ids, self.limits = bus, list(ids), limits
+        self.bus, self.ids, self.limits, self.monitor = bus, list(ids), limits, EnvelopeMonitor(limits)
         self.sent, self.received, self.lost, self.raw, self.valid = [], [], [], [], []
         self.commands, self.events = [], []  # (sent_ns, flushed_ns, goal) / (name, sent_ns, flushed_ns, values)
         self.recent, self.consecutive_lost = deque(), 0
@@ -120,7 +120,7 @@ class Recorder:
             if result.received_ns - self.recent[0][0] >= SETTLE_S * 1e9 and len(states) == len(self.ids):
                 positions = [states[sid]['position'] for sid in self.ids]
                 reference = dict(zip(self.ids, closest_recent_goal([g for _, g in self.recent], positions).tolist()))
-        return abort_reason(states, self.limits, reference, self.consecutive_lost)
+        return self.monitor.check(states, reference, self.consecutive_lost)
 
     def positions(self):
         result = self.bus.sync_read(self.ids, *STATE_BLOCK)
