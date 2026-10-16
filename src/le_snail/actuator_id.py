@@ -43,6 +43,7 @@ class SafetyLimits:
     max_consecutive_lost: int = 5
     max_start_drift_ticks: int = round(0.15 * TICKS_PER_RAD)  # hardware config start_tolerance_rad
     slow_signal_window: int = 25           # samples per servo (~50 ms) for the temperature/voltage median
+    load_persist_s: float = 0.3            # |load| must stay above max_abs_load this long (hard moves saturate briefly)
 
 
 def abort_reason(states, limits, goals=None, consecutive_lost=0):
@@ -72,14 +73,22 @@ class EnvelopeMonitor:
     STS3215 reads show single-sample spikes (temperature up to +25 C, voltage down ~1.4 V) in ~0.5 % of
     samples per servo even with torque off (#12 hold run of 2026-10-16 aborted on one 58 C sample).
     Real heating and supply sag are far slower than the window, so they still trip it within ~50 ms;
-    load, current, status, tracking and lost feedback stay per-sample.
+    Load aborts only once |load| has stayed above the limit for load_persist_s: a fast 30 deg shoulder_lift
+    step against gravity briefly reaches ~91 % duty, while a stalled or blocked joint stays there. Current,
+    status, tracking and lost feedback stay per-sample.
     """
     def __init__(self, limits):
-        self.limits, self.history = limits, {}
+        self.limits, self.history, self.overload_since = limits, {}, {}
 
-    def check(self, states, goals=None, consecutive_lost=0):
+    def check(self, states, goals=None, consecutive_lost=0, now_s=0.0):
         judged = {}
         for servo_id, s in states.items():
+            if abs(s['load']) > self.limits.max_abs_load:
+                since = self.overload_since.setdefault(servo_id, now_s)
+                if now_s - since < self.limits.load_persist_s:
+                    s = dict(s, load=0)  # not sustained yet
+            else:
+                self.overload_since.pop(servo_id, None)
             window = self.limits.slow_signal_window
             temperatures, voltages = self.history.setdefault(servo_id, (deque(maxlen=window), deque(maxlen=window)))
             temperatures.append(s['temperature_c'])

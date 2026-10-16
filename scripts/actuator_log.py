@@ -122,7 +122,7 @@ class Recorder:
             if result.received_ns - self.recent[0][0] >= SETTLE_S * 1e9 and len(states) == len(self.ids):
                 positions = [states[sid]['position'] for sid in self.ids]
                 reference = dict(zip(self.ids, closest_recent_goal([g for _, g in self.recent], positions).tolist()))
-        return self.monitor.check(states, reference, self.consecutive_lost)
+        return self.monitor.check(states, reference, self.consecutive_lost, result.received_ns / 1e9)
 
     def positions(self):
         result = self.bus.sync_read(self.ids, *STATE_BLOCK)

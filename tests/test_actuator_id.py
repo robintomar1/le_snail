@@ -135,8 +135,7 @@ def test_monitor_aborts_on_persistent_overheat_within_one_window():
 
 
 def test_monitor_keeps_fast_checks_instant():
-    monitor = EnvelopeMonitor(LIMITS)
-    assert 'load' in monitor.check({1: decode_state(block(load=950))})
+    assert 'current' in EnvelopeMonitor(LIMITS).check({1: decode_state(block(current=900))})
     assert 'status' in EnvelopeMonitor(LIMITS).check({1: decode_state(block(status=0x20))})
 
 
@@ -162,3 +161,14 @@ def test_frequency_response_recovers_gain_and_delay_of_a_chirp():
     for band in bands:
         assert band['gain'] == pytest.approx(0.8, abs=0.03)
         assert band['phase_deg'] == pytest.approx(-360 * band['f_hz'] * 0.06, abs=1.5)  # few FFT bins per low band
+
+
+def test_monitor_tolerates_brief_load_saturation_but_aborts_when_it_lasts():
+    monitor = EnvelopeMonitor(LIMITS)
+    brief = [monitor.check({2: decode_state(block(load=950))}, now_s=0.002 * k) for k in range(100)]  # 0.2 s
+    assert brief == [None] * 100
+    assert monitor.check({2: decode_state(block(load=100))}, now_s=0.202) is None  # the clock restarts
+    held = [monitor.check({2: decode_state(block(load=-950))}, now_s=0.204 + 0.002 * k) for k in range(200)]
+    first = next(k for k, reason in enumerate(held) if reason)
+    assert 'load' in held[first] and 'id 2' in held[first]
+    assert 0.002 * first == pytest.approx(LIMITS.load_persist_s, abs=0.003)
