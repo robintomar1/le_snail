@@ -26,6 +26,7 @@ import json
 from pathlib import Path
 import select
 import sys
+import threading
 import time
 
 import numpy as np
@@ -33,6 +34,7 @@ import numpy as np
 from le_snail.actuator_id import (
     EnvelopeMonitor, SafetyLimits, closest_recent_goal, decode_state, joint_window, plan_motion, rate_summary,
 )
+from le_snail.hardware import XMID_ERROR, XMID_MTDATA2, XRV_DATAOVERFLOW, XbusReader, enable_low_latency, mtdata2_fields, parse_mtdata2
 from le_snail.servo_bus import STATE_BLOCK, STS3215_REGISTERS, ServoBus, dump_servos, open_bus_port
 
 GOAL_POSITION, ACCELERATION, TORQUE_ENABLE = (STS3215_REGISTERS[name] for name in ('Goal_Position', 'Acceleration', 'Torque_Enable'))
@@ -128,10 +130,10 @@ class Recorder:
             raise SystemExit(f'No state from ids {result.lost}; not starting')
         return np.array([decode_state(result.replies[sid][1])['position'] for sid in self.ids])
 
-    def save(self, stem):
+    def save(self, stem, extra):
         n, j = len(self.raw), len(self.ids)
         np.savez_compressed(
-            stem.with_suffix('.npz'), ids=np.array(self.ids), sent_ns=np.array(self.sent, dtype=np.int64),
+            stem.with_suffix('.npz'), **extra, ids=np.array(self.ids), sent_ns=np.array(self.sent, dtype=np.int64),
             received_ns=np.array(self.received, dtype=np.int64), lost=np.array(self.lost),
             state_raw=np.frombuffer(b''.join(self.raw), dtype=np.uint8).reshape(n, j, STATE_BLOCK[1]),
             valid=np.array(self.valid, dtype=bool).reshape(n, j),
@@ -139,6 +141,64 @@ class Recorder:
             command_flushed_ns=np.array([c[1] for c in self.commands], dtype=np.int64),
             command_goal_ticks=np.array([c[2] for c in self.commands], dtype=int).reshape(len(self.commands), j))
         return rate_summary(self.sent, self.received, self.lost) if self.sent else {'cycles': 0}
+
+
+IMU_FIELDS = ['counter', 'sample_time_fine', 'qw', 'qx', 'qy', 'qz', 'gx', 'gy', 'gz', 'ax', 'ay', 'az']
+
+
+def open_imu_port(path, baudrate):
+    import serial
+    port = serial.Serial(path, baudrate=baudrate, timeout=0.05)
+    enable_low_latency(port)
+    return port
+
+
+class ImuLog:
+    """Read-only Xsens MTData2 capture on a thread, stamped with monotonic_ns on receipt (the servo log's clock)."""
+    def __init__(self, port):
+        self.port, self.reader = port, XbusReader(max_consecutive_errors=10_000)
+        self.received_ns, self.fields, self.overflows, self.errors = [], [], 0, []
+        self.stop = threading.Event()
+        self.port.reset_input_buffer()
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread.start()
+
+    def _run(self):
+        while not self.stop.is_set():
+            try:
+                data = self.port.read(self.port.in_waiting or 1)
+            except Exception as exc:  # the IMU is a reference only; servo safety does not depend on it
+                self.errors.append(f'serial: {exc}')
+                return
+            received = time.monotonic_ns()
+            for mid, payload in self.reader.feed(data):
+                if mid == XMID_ERROR:
+                    if payload[:1] == bytes((XRV_DATAOVERFLOW,)):
+                        self.overflows += 1
+                    else:
+                        self.errors.append(f'device error 0x{payload.hex()}')
+                elif mid == XMID_MTDATA2:
+                    try:
+                        self.fields.append(mtdata2_fields(parse_mtdata2(payload)))
+                    except ValueError as exc:
+                        self.errors.append(str(exc))
+                        continue
+                    self.received_ns.append(received)
+
+    def close(self):
+        self.stop.set()
+        self.thread.join(timeout=0.5)
+        self.port.close()
+
+    def arrays(self):
+        return {'imu_received_ns': np.array(self.received_ns, dtype=np.int64),
+                'imu_fields': np.array(self.fields, dtype=float).reshape(len(self.fields), len(IMU_FIELDS))}
+
+    def summary(self):
+        received = np.array(self.received_ns)
+        rate = float((len(received) - 1) / ((received[-1] - received[0]) / 1e9)) if len(received) > 1 else 0.0
+        return {'samples': len(received), 'rate_hz': rate, 'overflow_reports': self.overflows,
+                'errors': self.errors[:20], 'fields': IMU_FIELDS}
 
 
 def stdin_has_line():
@@ -159,12 +219,15 @@ def main():
     parser.add_argument('--start-ticks', type=int, nargs='+', help='pose to ramp to before the motion (default: present)')
     parser.add_argument('--ramp-s', type=float, default=3.0)
     parser.add_argument('--acceleration', type=int, default=254, help='LeRobot configure() Acceleration value')
+    parser.add_argument('--imu', help='Xsens port to log alongside (read-only reference; never written)')
+    parser.add_argument('--imu-baudrate', type=int, default=115200)
     args = parser.parse_args()
     if args.motion and not args.allow_motion:
         raise SystemExit('--motion writes to the servos; add --allow-motion once the operator has approved this run')
     limits = SafetyLimits()
     name = args.motion.stem if args.motion else 'dry-run'
 
+    imu = ImuLog(open_imu_port(args.imu, args.imu_baudrate)) if args.imu else None
     port = open_bus_port(args.port)
     bus = ServoBus(port, timeout_s=args.timeout_ms / 1000, allow_writes=bool(args.motion))
     recorder = Recorder(bus, args.ids, limits)
@@ -232,17 +295,19 @@ def main():
             servos_after = dump_servos(bus, args.ids)
         finally:
             port.close()
+            if imu:
+                imu.close()
 
     utc = datetime.now(timezone.utc)
     args.out.mkdir(parents=True, exist_ok=True)
     stem = args.out / f'{name}-{utc.strftime("%Y%m%dT%H%M%SZ")}'
-    summary = recorder.save(stem)
+    summary = recorder.save(stem, imu.arrays() if imu else {})
     meta = {'utc': utc.isoformat(), 'mode': 'motion' if args.motion else 'dry-run', 'motion': name,
             'motion_file': str(args.motion) if args.motion else None, 'port': args.port, 'ids': args.ids,
             'timeout_ms': args.timeout_ms, 'read_rate_hz': args.read_rate_hz, 'margin_ticks': args.margin_ticks,
             'start_ticks': args.start_ticks, 'ramp_s': args.ramp_s, 'state_block': list(STATE_BLOCK),
             'safety_limits': limits.__dict__, 'abort': abort, 'interrupted': interrupted, 'finished': finished,
-            'summary': summary,
+            'summary': summary, 'imu': imu.summary() if imu else None, 'imu_port': args.imu,
             'writes': [{'register': n, 'sent_ns': s, 'flushed_ns': f, 'values': v} for n, s, f, v in recorder.events],
             'register_dump_before': servos_before, 'register_dump_after': servos_after}
     stem.with_suffix('.json').write_text(json.dumps(meta, indent=1, default=list) + '\n')

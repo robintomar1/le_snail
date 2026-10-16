@@ -162,3 +162,13 @@ def test_other_xsens_errors_always_stop_the_stream():
     from le_snail.hardware import XsensStream
     with pytest.raises(RuntimeError, match='error code 28'):
         XsensStream(np.eye(3)).handle(0x42, bytes((0x28,)), 0.0)
+
+
+def test_mtdata2_fields_extracts_every_logged_quantity_and_marks_missing_ones_nan():
+    from le_snail.hardware import mtdata2_fields, parse_mtdata2
+    acc = struct.pack('>HB', 0x4020, 12) + struct.pack('>3f', 0.1, 0.2, 9.8)
+    fields = mtdata2_fields(parse_mtdata2(mtdata2(7, 1234, q_wxyz=(0.5, 0.5, 0.5, 0.5), gyro=(1., 2., 3.), extra=acc)))
+    assert fields[:2] == [7, 1234]
+    np.testing.assert_allclose(fields[2:], [0.5, 0.5, 0.5, 0.5, 1, 2, 3, 0.1, 0.2, 9.8], rtol=1e-6)
+    missing = mtdata2_fields(parse_mtdata2(mtdata2(8, 1300, quaternion_id=None)))
+    assert missing[:2] == [8, 1300] and np.all(np.isnan(missing[2:6])) and np.all(np.isnan(missing[9:]))

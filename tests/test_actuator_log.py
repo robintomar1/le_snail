@@ -3,9 +3,12 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import struct
+import time
 
 import numpy as np
 import pytest
+from le_snail.hardware import xbus_frame
 from le_snail.servo_bus import PING, READ, SYNC_READ, SYNC_WRITE, status_frame
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts' / 'actuator_log.py'
@@ -85,16 +88,19 @@ def run(tmp_path, monkeypatch):
     offsets[10:, 1] = 100
     np.savez(motion, offsets_ticks=offsets, rate_hz=100.0, ids=np.array(IDS), name='steps')
 
-    def go(sim, confirm=None):
+    def go(sim, confirm=None, imu=None):
         module = load_script()
         monkeypatch.setattr(module, 'open_bus_port', lambda path: sim)
+        monkeypatch.setattr(module, 'open_imu_port', lambda path, baudrate: imu)
         monkeypatch.setattr(module, 'stdin_has_line', lambda: True)
         monkeypatch.setattr('sys.stdin', io.StringIO('\n'))
         monkeypatch.setattr('builtins.input', lambda prompt='': (confirm and confirm(sim), 'MOVE')[1])
         monkeypatch.setattr('sys.argv', ['actuator_log.py', 'SIM', '--ids', *map(str, IDS), '--motion', str(motion),
-                                         '--allow-motion', '--ramp-s', '0.1', '--out', str(tmp_path / 'out')])
+                                         '--allow-motion', '--ramp-s', '0.1', '--out', str(tmp_path / 'out')]
+                            + (['--imu', 'FAKE'] if imu else []))
         module.main()
-        return json.loads(next((tmp_path / 'out').glob('*.json')).read_text())
+        meta_path = next((tmp_path / 'out').glob('*.json'))
+        return dict(json.loads(meta_path.read_text()), log=np.load(meta_path.with_suffix('.npz')))
     return go
 
 
@@ -131,3 +137,34 @@ def test_goal_that_does_not_read_back_refuses_before_torque_enable(run):
     with pytest.raises(SystemExit, match='Goal_Position read back'):
         run(sim)
     assert torque_writes(sim) == []
+
+
+class FakeImu:
+    """Streams one MTData2 frame (counter, sample time, quaternion) per read, like the Xsens at ~1 kHz."""
+    def __init__(self):
+        self.counter = 0
+
+    in_waiting = 0
+
+    def reset_input_buffer(self):
+        pass
+
+    def close(self):
+        pass
+
+    def read(self, n=1):
+        time.sleep(0.001)
+        self.counter += 1
+        items = [(0x1020, struct.pack('>H', self.counter)), (0x1060, struct.pack('>I', 10 * self.counter)),
+                 (0x2010, struct.pack('>4f', 1., 0., 0., 0.))]
+        return xbus_frame(0x36, b''.join(struct.pack('>HB', i, len(d)) + d for i, d in items))
+
+
+def test_imu_is_logged_on_the_servo_clock_alongside_the_run(run):
+    meta = run(SimServos(), imu=FakeImu())
+    log = meta['log']
+    assert meta['imu']['samples'] > 10 and meta['imu']['errors'] == []
+    assert log['imu_fields'].shape == (meta['imu']['samples'], 12)
+    assert np.all(np.diff(log['imu_fields'][:, 0]) == 1) and log['imu_fields'][0, 2] == 1.0
+    assert np.isnan(log['imu_fields'][0, 6])  # no gyro in this stream
+    assert log['sent_ns'][0] <= log['imu_received_ns'][-1] and log['imu_received_ns'][0] <= log['sent_ns'][-1]
