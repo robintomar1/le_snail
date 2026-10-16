@@ -1,0 +1,144 @@
+"""Stage 1 actuator identification (#12): state decoding, the run safety envelope, bus-rate statistics and
+bounded excitation motions, all in raw servo units (encoder ticks, 4096 per turn).
+
+Units of Present_Load (0.1% PWM duty) and Present_Current (~6.5 mA) are the reseller's and unverified;
+the load/current thresholds below are provisional and must be reviewed before the first powered run.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+import numpy as np
+
+from .servo_bus import STATE_BLOCK, decode_sign_magnitude
+
+TICKS_PER_RAD = 4096 / (2 * np.pi)
+
+
+def decode_state(params):
+    """Raw Present_* block (addresses 56-70) -> decoded values in register units."""
+    if len(params) != STATE_BLOCK[1]:
+        raise ValueError('State block has the wrong length')
+    word = lambda offset: int.from_bytes(params[offset:offset + 2], 'little')
+    return {
+        'position': decode_sign_magnitude(word(0), 15),
+        'velocity': decode_sign_magnitude(word(2), 15),
+        'load': decode_sign_magnitude(word(4), 10),
+        'voltage_v': params[6] / 10,
+        'temperature_c': params[7],
+        'status': params[9],
+        'moving': params[10],
+        'current': word(13),
+    }
+
+
+@dataclass(frozen=True)
+class SafetyLimits:
+    max_temperature_c: float = 55.0        # hardware config gate; servo protection trips at 70 C
+    voltage_range_v: tuple = (10.0, 12.6)
+    max_abs_load: int = 900                # 0.1 % PWM duty (provisional)
+    max_current: int = 500                 # ~6.5 mA units, ~3.3 A (provisional)
+    max_tracking_error_ticks: int = round(0.35 * TICKS_PER_RAD)  # hardware config max_tracking_error_rad
+    max_consecutive_lost: int = 5
+
+
+def abort_reason(states, limits, goals=None, consecutive_lost=0):
+    """First envelope violation as a message, or None. `states`: {id: decode_state(...)}; `goals`: {id: ticks}."""
+    if consecutive_lost > limits.max_consecutive_lost:
+        return f'{consecutive_lost} consecutive cycles lost a reply'
+    lo, hi = limits.voltage_range_v
+    for servo_id, s in states.items():
+        if s['temperature_c'] > limits.max_temperature_c:
+            return f'id {servo_id}: temperature {s["temperature_c"]} C above {limits.max_temperature_c}'
+        if not lo <= s['voltage_v'] <= hi:
+            return f'id {servo_id}: voltage {s["voltage_v"]} V outside {lo}-{hi}'
+        if abs(s['load']) > limits.max_abs_load:
+            return f'id {servo_id}: load {s["load"]} above {limits.max_abs_load}'
+        if s['current'] > limits.max_current:
+            return f'id {servo_id}: current {s["current"]} above {limits.max_current}'
+        if s['status']:
+            return f'id {servo_id}: status error bits 0x{s["status"]:02x}'
+        if goals and servo_id in goals and abs(s['position'] - goals[servo_id]) > limits.max_tracking_error_ticks:
+            return f'id {servo_id}: tracking error {s["position"] - goals[servo_id]} ticks'
+    return None
+
+
+def _stats(values_ms):
+    return {'p50': float(np.percentile(values_ms, 50)), 'p99': float(np.percentile(values_ms, 99)),
+            'max': float(np.max(values_ms))}
+
+
+def rate_summary(sent_ns, received_ns, lost):
+    sent_ns, received_ns, lost = map(np.asarray, (sent_ns, received_ns, lost))
+    summary = {'cycles': int(len(sent_ns)), 'transaction_ms': _stats((received_ns - sent_ns) / 1e6),
+               'lost_replies': int(lost.sum()), 'cycles_with_loss': int(np.count_nonzero(lost))}
+    if len(sent_ns) > 1:
+        summary['rate_hz'] = float((len(sent_ns) - 1) / ((sent_ns[-1] - sent_ns[0]) / 1e9))
+        summary['period_ms'] = _stats(np.diff(sent_ns) / 1e6)
+    return summary
+
+
+def joint_window(registers, margin_ticks):
+    """Software goal window: the servo's calibrated EEPROM position limits shrunk by a margin."""
+    lower = registers['Min_Position_Limit'] + margin_ticks
+    upper = registers['Max_Position_Limit'] - margin_ticks
+    if lower >= upper:
+        raise ValueError('Position limits leave no window after the margin')
+    return lower, upper
+
+
+# Motions are integer goal-tick arrays of shape (samples, joints) at a fixed command rate.
+
+def ramp(start, goal, duration_s, rate_hz):
+    n = max(1, round(duration_s * rate_hz))
+    fraction = np.arange(1, n + 1)[:, None] / n
+    return np.rint(start + (goal - start) * fraction).astype(int)
+
+
+def steps(center, joint, amplitudes, hold_s, rate_hz):
+    n = round(hold_s * rate_hz)
+    rows = []
+    for amplitude in amplitudes:
+        target = np.array(center, dtype=int)
+        target[joint] += amplitude
+        rows += [target] * n + [np.array(center, dtype=int)] * n
+    return np.array(rows)
+
+
+def chirp(center, joint, amplitude, f0_hz, f1_hz, duration_s, rate_hz):
+    t = np.arange(round(duration_s * rate_hz)) / rate_hz
+    phase = 2 * np.pi * (f0_hz * t + (f1_hz - f0_hz) * t ** 2 / (2 * duration_s))
+    path = np.tile(np.array(center, dtype=int), (len(t), 1))
+    path[:, joint] += np.rint(amplitude * np.sin(phase)).astype(int)
+    return path
+
+
+def hold_then(path, hold_s, rate_hz):
+    return np.concatenate([np.repeat(path[:1], round(hold_s * rate_hz), axis=0), path])
+
+
+def closest_recent_goal(recent_goals, positions):
+    """Per joint, the goal from the recent window nearest the measured position.
+
+    Tracking error is judged against this so a large step is not an error until it has had the settle
+    window to arrive, while a servo that stalls far from every recent goal still trips the envelope.
+    """
+    recent_goals = np.asarray(recent_goals)
+    nearest = np.argmin(np.abs(recent_goals - np.asarray(positions)), axis=0)
+    return recent_goals[nearest, np.arange(recent_goals.shape[1])]
+
+
+def plan_motion(present, start, offsets, lower, upper, ramp_s, rate_hz):
+    """Absolute goals: a ramp from the present pose to `start`, then `start + offsets`.
+
+    The present pose may lie outside the window (a limp arm often rests against a limit); the start pose
+    and every offset goal must lie inside it, and the offsets must begin at zero so nothing jumps.
+    """
+    offsets = np.asarray(offsets, dtype=int)
+    if np.any(offsets[0]):
+        raise ValueError('The motion must begin at zero offset')
+    motion = np.asarray(start, dtype=int) + offsets
+    if np.any(motion < np.asarray(lower)) or np.any(motion > np.asarray(upper)):
+        outside = np.flatnonzero(np.any((motion < np.asarray(lower)) | (motion > np.asarray(upper)), axis=0))
+        raise ValueError(f'Goals leave the window on joints {outside.tolist()}')
+    return np.concatenate([ramp(np.asarray(present), np.asarray(start), ramp_s, rate_hz), motion])

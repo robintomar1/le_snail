@@ -14,7 +14,9 @@ The idea descends from the ANYmal actuator network [H19]: an MLP from position-e
 - Our STS3215 servos run their own position loop and cannot measure torque, so a torque-output network is a poor first fit.
 - GapONet's public code has no SO-101 task. It targets Isaac Sim 4.5, and its SO-101 data was collected on a fixed-root arm, while Le Snail carries its body weight through its joints.
 
-**Our provisional actuator values look wrong.** The datasheet gives about 1.91 N·m stall torque and about 5.45 rad/s no-load speed at 7.4 V [FT-DS], against our 0.8 N·m effort limit and 2 rad/s simulated velocity limit. Published SO-101 sim gains also disagree by about 100× (Q4).
+**Our provisional actuator values looked wrong.** The datasheet gives about 1.91 N·m stall torque and about 5.45 rad/s no-load speed at 7.4 V [FT-DS], against our 0.8 N·m effort limit and 2 rad/s simulated velocity limit. Published SO-101 sim gains also disagree by about 100× (Q4).
+
+> **Update 2026-10-15/16.** Le Snail's servos are the **12 V** STS3215 (C018/C047, sticker-checked), not the 7.4 V C001 this study first assumed: stall ≈ 2.94 N·m, rated 0.98 N·m, no-load ≈ 4.7 rad/s, bench-tested stable dynamic torque ≈ 1.47 N·m, backlash ≈ 0.87° (#12, 2026-10-15). Physics-v2 replaced the 0.8 N·m / 2 rad/s placeholders with 1.5 N·m nominal (0.98–2.94 randomized) and 4 rad/s (3.0–4.7). Measured register state and bus rate are in [Stage 0 and Stage 1 dry-run results](#stage-0-and-stage-1-dry-run-results-2026-10-16).
 
 **Recommendation: measure first, then identify a parametric model, and escalate to a learned one only if structured residuals remain.**
 1. Measure the gap with SAGE-style paired replay. Use SAGE's motion files and metrics, but our own logger and our own Isaac Lab env.
@@ -203,6 +205,8 @@ The asset configs are in `source/isaaclab_assets/isaaclab_assets/robots/` [IL-as
 ## 4. Applying this to STS3215 position servos
 
 ### STS3215 facts (7.4 V variant, ST-3215-C001)
+
+> **Wrong variant for Le Snail.** Our servos are the 12 V STS3215; use the 12 V figures in the summary's update note. The 7.4 V table is kept for the BAM comparison below, whose fits are for the 7.4 V servo.
 
 **Official Feetech datasheet**, edition A/0, 2020-04-10 [FT-DS]:
 
@@ -456,6 +460,32 @@ Reasons:
   - Decide with the Stage 1 data: if a delay plus PD plus limits model reaches held-out RMSE near the encoder and backlash floor, stop there.
 - **Version drift.** SAGE targets Isaac Lab 2.2 / Sim 5.0 and GapONet targets Sim 4.5, versus our Isaac Lab 2.3.2 / Sim 5.1. Joint friction changed meaning between Sim 4.5 and 5.x. Keep all identification inside our pinned stack.
 
+## Stage 0 and Stage 1 dry-run results (2026-10-16)
+
+Read-only measurements on IDs 1–5 (the gripper servo, ID 6, was unplugged). Adapter: the ESP32-S3 CH343 USB-serial bridge used as a pass-through to the Waveshare bus board at 1 Mbps, with the ESP32 held in reset. Tools (no LeRobot needed; framing and register table from LeRobot `ae2b57f`):
+- `scripts/servo_dump.py PORT`: PING + READ of addresses 0–70 and 80–86 to `runs/actuator-id/stage0/registers-<utc>.json`, with the registers LeRobot `configure()` would change.
+- `scripts/actuator_log.py PORT`: one `sync_read` of the 56–70 block per cycle, `monotonic_ns` before and after each transaction, raw bytes to `.npz`. Dry run by default. `--motion FILE --allow-motion` writes goals (operator approval per run).
+- `scripts/actuator_motions.py`: one-joint step and chirp offset files for the logger.
+
+**Registers (`runs/actuator-id/stage0/registers-20261016T170902Z.json`).** All five: model 777, firmware 3.10, 12.0–12.1 V, 33–34 °C.
+
+| Register | Value | Note |
+|---|---|---|
+| P / I / D | 16 / 0 / 32 | already LeRobot's values |
+| `Maximum_Acceleration` (85) | 254 | already LeRobot's value |
+| `Return_Delay_Time` | 0 | already LeRobot's value |
+| `Operating_Mode` | 0 (position) | |
+| `Phase` | 0x0C | bit 4 clear, so `configure()` leaves it |
+| **`Acceleration` (41, RAM)** | **0** | `configure()` writes 254. RAM resets at power-up, so the servo runs with a different acceleration setting until LeRobot connects. Identify after that write. |
+| `Max_Torque_Limit` / `Torque_Limit` | 1000 / 1000 | |
+| `Protection_Current` / `Overload_Torque` | 310 / 80 | |
+| `Protective_Torque` / `Protection_Time` | 20 / 200 | |
+| `Maximum_Velocity_Limit` (84) | 65 | × `Velocity_Unit_factor` 50 = 3250 step/s ≈ 5.0 rad/s, if the unit is step/s (unverified) |
+| `Min_` / `Max_Position_Limit` | 806–3520, 947–3303, 789–3010, 1493–3254, 0–4095 | calibration-set; the logger's software window is these minus a margin |
+| **`Goal_Position`** | **0** while torque is off | never enable torque before writing goal = present position |
+
+**Bus rate.** 60 s unpaced dry run: **488 Hz**, 29,299 cycles, **0 lost replies**. Transaction (request to last reply) p50 1.94 ms, p99 2.92 ms, max 4.26 ms; period p50 2.00 ms, p99 3.09 ms. That is about 0.5 ms over the 1.4 ms wire estimate, so a goal write at 50 Hz plus a block read stays well above the 100–300 Hz target.
+
 ## Not verified
 
 - **Which NVIDIA page the user had in mind.** It is assumed to be Strategy 4 (SAGE + GapONet) of the confirmed course.
@@ -474,7 +504,7 @@ Reasons:
   - Register units come from the Waveshare reseller map, because Feetech's official memory table was not retrieved.
   - Whether the encoder reads the output shaft.
   - The default `Return_Delay_Time` and the maximum `Acceleration` value (secondary sources disagree).
-- **Bus timing.** The ~1 ms `sync_read` figure is a single community measurement on a Jetson. Our numbers are wire-time estimates; measure on the Le Snail laptop and USB adapter.
+- ~~**Bus timing.**~~ Measured on the Le Snail laptop on 2026-10-16; see Stage 0 and Stage 1 dry-run results.
 - **Acceleration effect.** The derived 39 rad/s² acceleration limit, and its effect at 20 Hz.
 - **Implicit-actuator subclass.** That a custom `ImplicitActuator` subclass rewriting `joint_positions` behaves as described. This is inferred from the source and not run.
 
