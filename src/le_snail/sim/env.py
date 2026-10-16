@@ -90,12 +90,13 @@ def make_config(asset, contract_path, physics_path, *, num_envs=256, stage='craw
 
 class SnailEnv(DirectRLEnv):
     cfg: SnailEnvCfg
+    allow_fixed_base = False   # only the suspended-arm sim twin (scripts/sim_twin_replay.py) sets this
 
     def __init__(self, cfg, render_mode=None, **kwargs):
         self.contract = PolicyContract.load(cfg.contract_path)
         self.physics = load_physics(cfg.physics_path)
         super().__init__(cfg, render_mode=render_mode, **kwargs)
-        if self.robot.is_fixed_base:
+        if self.robot.is_fixed_base and not self.allow_fixed_base:
             raise RuntimeError('The imported robot is fixed to the world; crawling is impossible')
         self.joint_ids, names = self.robot.find_joints(self.contract.joint_names, preserve_order=True)
         if names != self.contract.joint_names or self.robot.num_joints != 6:

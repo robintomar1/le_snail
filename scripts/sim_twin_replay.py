@@ -16,6 +16,7 @@ import argparse
 import csv
 import json
 import math
+import os
 from pathlib import Path
 import sys
 import traceback
@@ -81,7 +82,11 @@ try:
         cfg.robot_cfg.actuators['servos'].damping = args.damping
     if args.effort_limit is not None:
         cfg.robot_cfg.actuators['servos'].effort_limit_sim = args.effort_limit
-    env = SnailEnv(cfg)
+
+    class TwinEnv(SnailEnv):
+        allow_fixed_base = True
+
+    env = TwinEnv(cfg)
     robot, sim = env.robot, env.sim
     device = env.device
     names = list(contract.joint_names)
@@ -130,9 +135,10 @@ try:
     print(json.dumps({'steps': len(rows), 'output': str(args.output)}), flush=True)
 except BaseException:
     traceback.print_exc()
-    import omni.kit.app
-    omni.kit.app.get_app().post_quit(1)
-    raise
+    sys.stdout.flush()
+    sys.stderr.flush()
+    # app.close() after an exception here spun at 100% CPU for hours (first self-test); exit hard instead.
+    os._exit(1)
 finally:
     if 'env' in globals():
         env.close()
