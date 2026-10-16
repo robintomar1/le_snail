@@ -110,8 +110,15 @@ class SnailEnv(DirectRLEnv):
         self.target = self.home.repeat(self.num_envs, 1)
         self.applied_target = self.target.clone()
         self.old_target = self.target.clone()
-        self.command_queue = self.target[:, None, :].repeat(1, 2, 1)
+        # Command delay: legacy configs delay by 0 or 1 whole policy step (max_action_delay_steps). With
+        # command_delay_ms (#12) the delay is a time, resolved per physics substep, nominal outside the robust
+        # stage and drawn from command_delay_range_ms in it; the queue holds every command still in flight.
+        self.delay_in_ms = 'command_delay_ms' in self.physics
+        longest = max(self.physics['command_delay_ms'], *self.physics.get('command_delay_range_ms', [0.])) if self.delay_in_ms else 0.
+        slots = math.ceil(longest / 1000. / self.step_dt - 1e-9) + 1 if self.delay_in_ms else 2
+        self.command_queue = self.target[:, None, :].repeat(1, max(slots, 2), 1)
         self.delay_steps = torch.zeros(self.num_envs, dtype=torch.long, device=self.device)
+        self.delay_s = torch.full((self.num_envs,), self.physics.get('command_delay_ms', 0.) / 1000., device=self.device)
         self.previous_q = self.target.clone()
         self.filtered_velocity = torch.zeros_like(self.target)
         self.observation_cache = torch.zeros((self.num_envs, 24), device=self.device)
@@ -418,7 +425,7 @@ class SnailEnv(DirectRLEnv):
         desired = torch.clamp(unclipped, self.lower, self.upper)
         self.target += torch.clamp(desired - self.target, -self.slew, self.slew)
         self.action_monitor.update(actions, unclipped, desired, self.old_target, self.target, self.slew, self.lower, self.upper, mask=learner)
-        self.command_queue[:, 1] = self.command_queue[:, 0]
+        self.command_queue[:, 1:] = self.command_queue[:, :-1].clone()
         self.command_queue[:, 0] = self.target
         self.previous_x = self.robot.data.root_pos_w[:, 0].clone()
         if teacher_actions is not None:
@@ -459,6 +466,12 @@ class SnailEnv(DirectRLEnv):
         # DirectRLEnv increments this counter before applying each substep.
         # Read the previous completed substep before replacing its target.
         self._record_speed(self._sim_step_counter - 1)
+        if self.delay_in_ms:
+            # The command issued at policy step n acts from time n T + delay; this substep is s physics steps into
+            # the period, so the command in force is ceil((delay - s h) / T) steps old.
+            substep = (self._sim_step_counter - 1) % self.cfg.decimation
+            age = torch.ceil((self.delay_s - substep * self.physics_dt) / self.step_dt - 1e-6)
+            self.delay_steps = age.clamp(0, self.command_queue.shape[1] - 1).long()
         delayed = self.command_queue[torch.arange(self.num_envs, device=self.device), self.delay_steps]
         self.applied_target.copy_(delayed)
         self.robot.set_joint_position_target(delayed, joint_ids=self.joint_ids)
@@ -817,7 +830,11 @@ class SnailEnv(DirectRLEnv):
             low, high = bounds
             return low + torch.rand(n, device=self.device) * (high-low)
         self.drag[env_ids] = uniform(self.physics['drag_force_range_n']) if robust else 0.
-        self.delay_steps[env_ids] = torch.randint(self.physics['max_action_delay_steps'] + 1, (n,), device=self.device) if robust else 0
+        if self.delay_in_ms:
+            nominal = self.physics['command_delay_ms'] / 1000.
+            self.delay_s[env_ids] = uniform([v / 1000. for v in self.physics['command_delay_range_ms']]) if robust and 'command_delay_range_ms' in self.physics else nominal
+        else:
+            self.delay_steps[env_ids] = torch.randint(self.physics['max_action_delay_steps'] + 1, (n,), device=self.device) if robust else 0
         mats = self.robot.root_physx_view.get_material_properties()
         friction = uniform(self.physics['static_friction_range']) if robust else torch.full((n,), sum(self.physics['static_friction_range']) / 2, device=self.device)
         mats[ids_cpu, :, 0] = friction.cpu()[:, None]

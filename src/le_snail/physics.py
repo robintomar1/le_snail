@@ -15,6 +15,14 @@ def load_physics(path):
     for key in positive:
         if not math.isfinite(config[key]) or config[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')
+    if 'command_delay_ms' in config:
+        nominal = config['command_delay_ms']
+        if type(nominal) not in (int, float) or not math.isfinite(nominal) or nominal < 0:
+            raise ValueError('command_delay_ms must be finite and nonnegative')
+        if 'command_delay_range_ms' in config:
+            low, high = config['command_delay_range_ms']
+            if not (math.isfinite(low) and math.isfinite(high) and 0 <= low <= nominal <= high):
+                raise ValueError('command_delay_range_ms must be a nonnegative ordered interval containing command_delay_ms')
     if 'distal_mass_scale_range' in config:
         low, high = config['distal_mass_scale_range']
         if not (math.isfinite(low) and math.isfinite(high) and 0 < low <= high) or not config.get('distal_bodies'):
