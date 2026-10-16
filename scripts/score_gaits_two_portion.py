@@ -5,7 +5,9 @@ Uses the reward block of --config on 20 Hz traces of world x, upright cosine and
 and forward portions and the effort cost are reproduced exactly as in src/le_snail/rewards.py (crawl mode on
 after cos >= 0.8 for 0.5 s, off below 0.5; new ground against the running max of x). The get-up potential
 shaping is approximated with Phi = u^2 (a lower bound of max(progress, u^2)); for upright gaits it mostly
-telescopes. Reports per-second totals, the share of net forward distance that earns credit, crawl-mode time
+telescopes. Optional refinements of the config (#15) are applied when present: roll/pitch uprightness, lane,
+heading and non-support contact (inchworm traces record per-link contact; for the rock gaits the study's
+measured other-body contact fraction is applied as an expected rate). Reports per-second totals, the share of net forward distance that earns credit, crawl-mode time
 and the time below each uprightness threshold, against standing still at the settled upright pose.
 """
 import argparse
@@ -41,11 +43,22 @@ def crawl_mode(up):
     return out
 
 
-def score(x, up, target, alive=None):
+def level(up, roll, pitch):
+    """Uprightness for the standing/forward portions (angles in radians)."""
+    if reward.get('uprightness', 'cos') == 'cos' or roll is None:
+        return up
+    low, high = (np.radians(v) for v in reward['pitch_bound_deg'])
+    return np.cos(roll) * np.clip((np.cos(pitch) - np.cos(high)) / (np.cos(low) - np.cos(high)), 0., 1.)
+
+
+def score(x, up, target, alive=None, y=None, yaw=None, roll=None, pitch=None, other=None):
     n = len(x) if alive is None else int(alive.sum())
     x, up, target = x[:n] - x[0], up[:n], target[:n]
-    u2 = ramp(up, reward['standing_ramp_cos']) ** 2
-    gate = ramp(up, reward['forward_gate_cos'])
+    cut = lambda v: None if v is None else (v[:n] if np.ndim(v) else np.full(n, float(v)))
+    y, yaw, roll, pitch, other = (cut(v) for v in (y, yaw, roll, pitch, other))
+    e = level(up, roll, pitch)
+    u2 = ramp(e, reward['standing_ramp_cos']) ** 2
+    gate = ramp(e, reward['forward_gate_cos'])
     mode = crawl_mode(up)
     record = np.maximum.accumulate(np.concatenate(([0.], x)))[:-1]
     ground = np.maximum(x - record, 0.)
@@ -54,11 +67,18 @@ def score(x, up, target, alive=None):
     effort = -reward['effort_weight'] * DT * (rate ** 2).sum(1) * gate
     standing = reward['standing_per_s'] * DT * u2
     shaping = reward['getup_progress_weight'] * (GAMMA * u2[1:] - u2[:-1])
+    extra = {}
+    if reward.get('lane_per_s') and y is not None:
+        extra['lane'] = -reward['lane_per_s'] * DT * ramp(np.abs(y - y[0]), reward['lane_band_m'])
+    if reward.get('heading_per_s') and yaw is not None:
+        extra['heading'] = -reward['heading_per_s'] * DT * ramp(np.abs(yaw), np.radians(reward['heading_band_deg'])) * gate
+    if reward.get('contact_per_s') and other is not None:
+        extra['contact'] = -reward['contact_per_s'] * DT * other * gate
     seconds = n * DT
     return {'seconds': seconds, 'fell': bool((up < .5).any()), 'net_forward_m': float(x[-1]),
             'per_s': {'standing': standing.sum() / seconds, 'forward': forward.sum() / seconds, 'effort': effort.sum() / seconds,
-                      'shaping_u2_approx': shaping.sum() / seconds},
-            'total_per_s': (standing.sum() + forward.sum() + effort.sum() + shaping.sum()) / seconds,
+                      'shaping_u2_approx': shaping.sum() / seconds, **{k: v.sum() / seconds for k, v in extra.items()}},
+            'total_per_s': (standing.sum() + forward.sum() + effort.sum() + shaping.sum() + sum(v.sum() for v in extra.values())) / seconds,
             'forward_credit_share': float((gate * mode * ground).sum() / max(ground.sum(), 1e-9)),
             'new_ground_m': float(ground.sum()),
             'crawl_mode_time_share': float(mode.mean()),
@@ -69,18 +89,26 @@ def score(x, up, target, alive=None):
 groups = {}
 d = np.load('runs/gait-study-rowing/eval/nominal_traces.npz')
 for i, name in enumerate(d['names']):
-    groups.setdefault(f'rowing/{name}', []).append(score(d['x'][i], d['up'][i], d['tgt'][i]))
+    groups.setdefault(f'rowing/{name}', []).append(score(d['x'][i], d['up'][i], d['tgt'][i], y=d['y'][i], yaw=d['yaw'][i],
+                                                        roll=d['roll'][i], pitch=d['pitch'][i]))
 d = np.load('runs/gait-study-inchworm/eval-nominal/traces_round00.npz')
 sets = json.loads(Path('runs/gait-study-inchworm/eval_sets.json').read_text()) if Path('runs/gait-study-inchworm/eval_sets.json').exists() else None
 for j in range(d['x'].shape[1]):
-    groups.setdefault(f'inchworm/env{int(d["envs"][j])}', []).append(score(d['x'][:, j], d['up'][:, j], d['target'][:, j], d['alive'][:, j]))
+    other = d['contact'][:, j][:, [1, 2, 3, 4]].any(axis=1).astype(float)   # links other than base and gripper/jaw
+    groups.setdefault(f'inchworm/env{int(d["envs"][j])}', []).append(score(d['x'][:, j], d['up'][:, j], d['target'][:, j], d['alive'][:, j],
+                                                                          y=d['y'][:, j], yaw=d['yaw'][:, j], roll=d['roll'][:, j],
+                                                                          pitch=d['pitch'][:, j], other=other))
+# Measured fraction of time a non-support body touches the floor (runs/gait-study-rock/report.md, nominal).
+ROCK_OTHER_CONTACT = {'D-balanced': .11, 'A-fast-pitch-rock': .34, 'B-clean-drag': 0., 'C-lateral-rocker': .44}
 cands = json.loads(Path('runs/gait-study-rock/final_cands.json').read_text())
 z = np.load('runs/gait-study-rock/final1/trace-batch0.npz')['steps']
 per = z.shape[0] // len(cands)
 for ci, c in enumerate(cands):
     for e in range(ci * per, (ci + 1) * per):
         tr = z[e]
-        groups.setdefault(f"rock/{c.get('name', ci)}", []).append(score(tr[:, 0], tr[:, 3], tr[:, 13:19], tr[:, 19] > 0))
+        groups.setdefault(f"rock/{c.get('name', ci)}", []).append(score(
+            tr[:, 0], tr[:, 3], tr[:, 13:19], tr[:, 19] > 0, y=tr[:, 1], yaw=tr[:, 4], roll=np.radians(tr[:, 5]), pitch=np.radians(tr[:, 6]),
+            other=ROCK_OTHER_CONTACT.get(c.get('name'))))
 
 still = {'seconds': 120., 'per_s': {'standing': reward['standing_per_s'] * ramp(np.array([REST_COS]), reward['standing_ramp_cos'])[0] ** 2,
          'forward': 0., 'effort': 0., 'shaping_u2_approx': -(1 - GAMMA) * reward['getup_progress_weight'] * ramp(np.array([REST_COS]), reward['standing_ramp_cos'])[0] ** 2 / DT}}

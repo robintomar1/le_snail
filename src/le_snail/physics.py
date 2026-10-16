@@ -15,6 +15,10 @@ def load_physics(path):
     for key in positive:
         if not math.isfinite(config[key]) or config[key] <= 0:
             raise ValueError(f'{key} must be finite and positive')
+    if 'distal_mass_scale_range' in config:
+        low, high = config['distal_mass_scale_range']
+        if not (math.isfinite(low) and math.isfinite(high) and 0 < low <= high) or not config.get('distal_bodies'):
+            raise ValueError('distal_mass_scale_range must be a positive ordered interval with distal_bodies')
     for key in ('static_friction_range', 'mass_scale_range', 'gain_scale_range', 'drag_force_range_n'):
         values = config[key]
         if len(values) != 2 or not all(math.isfinite(v) for v in values) or not 0 <= values[0] <= values[1]:
@@ -113,6 +117,17 @@ def load_physics(path):
 def validate_handover(config):
     """Scripted-prefix handover curriculum: teacher keyframes and audited prefix lengths."""
     handover = config['handover']
+    if handover.get('teacher') == 'hybrid':
+        # Track B (#15): the hybrid scripted controller drives a random prefix of upright and side starts.
+        fraction = handover.get('fraction_of_starts')
+        if not isinstance(fraction, (int, float)) or not math.isfinite(fraction) or not 0 < fraction <= 1:
+            raise ValueError('Hybrid handover fraction_of_starts must be within (0, 1]')
+        prefix = handover.get('max_prefix_s', {})
+        if set(prefix) != {'upright', 'side'} or not all(isinstance(v, (int, float)) and math.isfinite(v) and v > 0 for v in prefix.values()):
+            raise ValueError('Hybrid handover max_prefix_s needs positive upright and side durations')
+        if not handover.get('controller') or not handover.get('controller_sha256'):
+            raise ValueError('Hybrid handover needs a controller config and its hash')
+        return
     fraction = handover.get('fraction_of_side_starts')
     if not isinstance(fraction, (int, float)) or not math.isfinite(fraction) or not 0 < fraction <= 1:
         raise ValueError('Handover fraction_of_side_starts must be within (0, 1]')

@@ -1,5 +1,6 @@
 """Two-portion reward (#6): forward = new ground while upright; standing up = progress potential + standing."""
 import json
+import math
 from pathlib import Path
 
 import numpy as np
@@ -104,3 +105,55 @@ def test_forward_requires_crawl_mode_when_configured():
                                              crawling=torch.tensor([crawling]))
         assert float(terms['forward'][0]) == pytest.approx(expected)
         assert float(record[0]) == pytest.approx(.1)   # the record advances even when nothing is paid
+
+
+# Refinements (#15): roll-based uprightness with a pitch bound, lane, heading, non-support contact.
+REFINED = {**CONFIG, 'uprightness': 'roll_pitch', 'pitch_bound_deg': [45., 60.], 'lane_per_s': .5, 'lane_band_m': [.05, .15],
+           'heading_per_s': .5, 'heading_band_deg': [30., 90.], 'contact_per_s': 4.}
+
+
+def _gravity(roll_deg, pitch_deg):
+    """Unit gravity in the base frame for a base pitched then rolled (roll about x, pitch about y)."""
+    r, p = math.radians(roll_deg), math.radians(pitch_deg)
+    return torch.tensor([[-math.sin(p), math.cos(p) * math.sin(r), -math.cos(p) * math.cos(r)]])
+
+
+def _refined(gravity, lateral=0., yaw=0., contact=False, config=REFINED):
+    terms, _, _ = two_portion_terms(config, _far_bank(), upright=-gravity[:, 2], features=torch.zeros((1, 9)), x=torch.tensor([.1]),
+                                    x_record=torch.tensor([0.]), previous_phi=torch.tensor([float('nan')]), terminated=torch.tensor([False]),
+                                    command_rate=torch.zeros((1, 6)), dt=.02, gamma=.998, crawling=None, gravity=gravity,
+                                    lateral=torch.tensor([lateral]), yaw=torch.tensor([yaw]), other_contact=torch.tensor([contact]))
+    return {k: float(v[0]) for k, v in terms.items()}
+
+
+def test_pitch_rocking_within_the_bound_keeps_full_standing_and_forward_credit():
+    for pitch in (0., 30., 44.):
+        terms = _refined(_gravity(0., pitch))
+        assert terms['standing'] == pytest.approx(.25 * .02) and terms['forward'] == pytest.approx(3.)
+    assert 0. < _refined(_gravity(0., 52.))['forward'] < 3.
+    assert _refined(_gravity(0., 61.))['forward'] == 0.
+    # The tilt cosine at 44 deg pitch (0.72) would have cut the forward gate to 0.73.
+    assert _refined(_gravity(0., 44.), config=CONFIG)['forward'] == pytest.approx(3. * (math.cos(math.radians(44)) - .5) / .3, abs=1e-5)
+
+
+def test_roll_still_costs_uprightness():
+    assert _refined(_gravity(40., 0.))['forward'] == pytest.approx(3. * (math.cos(math.radians(40)) - .5) / .3, abs=1e-5)
+    # Lying on a side earns exactly what reward 002 paid there (the pitch bound only changes front-to-back tilt).
+    assert _refined(_gravity(90., 0.))['standing'] == pytest.approx(_refined(_gravity(90., 0.), config=CONFIG)['standing'])
+
+
+def test_lane_heading_and_contact_terms():
+    upright = _gravity(0., 20.)
+    assert _refined(upright, lateral=.04)['lane'] == 0.
+    assert _refined(upright, lateral=-.10)['lane'] == pytest.approx(-.5 * .02 * .5)
+    assert _refined(upright, lateral=.2)['lane'] == pytest.approx(-.5 * .02)
+    assert _refined(upright, yaw=math.radians(25))['heading'] == 0.
+    assert _refined(upright, yaw=-math.radians(60))['heading'] == pytest.approx(-.5 * .02 * .5)
+    assert _refined(upright, contact=True)['contact'] == pytest.approx(-4. * .02)
+    lying = _gravity(90., 0.)
+    assert _refined(lying, yaw=2., contact=True)['heading'] == 0. and _refined(lying, contact=True)['contact'] == 0.
+
+
+def test_configs_without_refinements_are_unchanged():
+    terms = _refined(_gravity(0., 20.), config=CONFIG)
+    assert set(terms) == {'getup_progress', 'standing', 'forward', 'effort'}

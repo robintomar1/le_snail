@@ -83,6 +83,8 @@ def make_config(asset, contract_path, physics_path, *, num_envs=256, stage='craw
         )},
         soft_joint_pos_limit_factor=1.0,
     )
+    if p.get('reward', {}).get('contact_per_s'):
+        cfg.robot_cfg.spawn.activate_contact_sensors = True   # contact reporting for the reward; dynamics unchanged
     return cfg
 
 
@@ -163,6 +165,11 @@ class SnailEnv(DirectRLEnv):
             if len(ids) != 1:
                 raise ValueError(f'Protected probe body is ambiguous: {probe}')
             self.probes.append((ids[0], self.tensor(probe['position_m']).repeat(self.num_envs, 1), float(probe['radius_m'])))
+        if 'distal_mass_scale_range' in self.physics:
+            ids, _ = self.robot.find_bodies(self.physics['distal_bodies'], preserve_order=True)
+            if len(ids) != len(self.physics['distal_bodies']):
+                raise ValueError('Distal mass bodies not found')
+            self.distal_body_ids_cpu = torch.tensor(ids)
         self._init_handover()
         self._init_two_portion()
 
@@ -178,6 +185,10 @@ class SnailEnv(DirectRLEnv):
             raise ValueError('Get-up progress bank does not match the hash recorded in the physics config')
         # The potential uses the same per-step discount as training (0.995 per 50 ms).
         self.two_portion = {'config': reward, 'bank': ProgressBank(bank_path, self.device), 'gamma': .995 ** (self.step_dt / .05)}
+        if reward.get('contact_per_s'):
+            names = list(self.contact_sensor.body_names)
+            support = [names.index(name) for name in reward['support_bodies']]
+            self.other_bodies = torch.tensor([i for i in range(len(names)) if i not in support], device=self.device)
         self.previous_phi = torch.full((self.num_envs,), float('nan'), device=self.device)
         self.x_record = self.robot.data.root_pos_w[:, 0].clone()
         self.getup_potential = torch.zeros(self.num_envs, device=self.device)
@@ -193,7 +204,9 @@ class SnailEnv(DirectRLEnv):
             self.two_portion['config'], self.two_portion['bank'], upright=-gravity[:, 2], features=features,
             x=self.robot.data.root_pos_w[:, 0], x_record=self.x_record, previous_phi=self.previous_phi,
             terminated=self.reset_terminated, command_rate=(self.target - self.old_target) / self.step_dt,
-            dt=self.step_dt, gamma=self.two_portion['gamma'], crawling=self.crawling)
+            dt=self.step_dt, gamma=self.two_portion['gamma'], crawling=self.crawling, gravity=gravity,
+            lateral=self.robot.data.root_pos_w[:, 1] - self.start_pos[:, 1], yaw=self.yaw(self.robot.data.root_quat_w),
+            other_contact=self.other_ground_contact() if self.two_portion['config'].get('contact_per_s') else None)
         self.previous_phi = phi
         self.getup_potential = phi
         terms['protected_contact'] = -self.protected_contact().float()
@@ -214,6 +227,11 @@ class SnailEnv(DirectRLEnv):
         stats['Recovery/upright_falls'], stats['Recovery/upright_fall_recoveries'] = delta[12], delta[13]
         self.extras['log'] = {**self.extras.get('log', {}), **stats}
         return sum(terms.values())
+
+    def other_ground_contact(self):
+        """True where a link other than the support bodies (base, gripper) presses on the ground (> 0.2 N)."""
+        forces = self.contact_sensor.data.force_matrix_w[:, self.other_bodies, 0].norm(dim=-1)
+        return (forces > 0.2).any(dim=1)
 
     def _init_handover(self):
         """Scripted-prefix handover curriculum (#6). Training resets only; never in evaluation.
@@ -257,6 +275,18 @@ class SnailEnv(DirectRLEnv):
         config = self.physics['handover']
         if 'attempt_seconds' in config:
             self.attempt_steps = round(config['attempt_seconds'] / self.step_dt)
+        if config.get('teacher') == 'hybrid':
+            # Track B (#15): the hybrid scripted controller (#14) drives a random prefix of some episodes, upright
+            # (crawling) or side (settle and get-up), then the learner takes over from the state it reached.
+            from le_snail.hybrid import load_controller
+            if file_hash(config['controller']) != config['controller_sha256']:
+                raise ValueError('Hybrid controller config does not match the hash recorded in the physics config')
+            self.hybrid = load_controller(config['controller'], self.cfg.contract_path).to(self.device)
+            self.hybrid._ensure(n, torch.device(self.device))
+            steps = {code: round(config['max_prefix_s'][key] / self.step_dt) for code, key in ((0, 'upright'), (1, 'side'), (2, 'side'))}
+            self.teacher = {'type': 'hybrid', 'fraction': float(config['fraction_of_starts']), 'names': ['hybrid'],
+                            'max_prefix_steps': self.tensor([steps[0], steps[1], steps[2]]).long(), 'sides': None}
+            return
         names, sides = [], {}
         for code, side in ((1, 'left'), (2, 'right')):
             variants = config['scripts'][side]
@@ -285,6 +315,16 @@ class SnailEnv(DirectRLEnv):
 
     def _assign_teachers(self, env_ids):
         side = self.initial_side[env_ids]
+        if self.teacher.get('type') == 'hybrid':
+            chosen = torch.rand(len(env_ids), device=self.device) < self.teacher['fraction']
+            longest = self.teacher['max_prefix_steps'][side]
+            prefix = 1 + (torch.rand(len(env_ids), device=self.device) * longest).long().clamp(max=longest - 1)
+            selected = env_ids[chosen]
+            self.teacher_left[selected] = prefix[chosen]
+            self.handover_prefix[selected] = prefix[chosen]
+            self.handover_variant[selected] = 0
+            self.hybrid.reset_envs(selected)
+            return
         chosen = (side > 0) & (torch.rand(len(env_ids), device=self.device) < self.teacher['fraction'])
         for code, table in self.teacher['sides'].items():
             selected = env_ids[chosen & (side == code)]
@@ -349,6 +389,13 @@ class SnailEnv(DirectRLEnv):
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=['/World/Ground'])
         self.scene.articulations['robot'] = self.robot
+        self.contact_sensor = None
+        if self.cfg.robot_cfg.spawn.activate_contact_sensors:
+            from isaaclab.sensors import ContactSensor, ContactSensorCfg
+            # Filtered to the ground so self-collisions between links never count (as in the #13 gait study).
+            self.contact_sensor = ContactSensor(ContactSensorCfg(prim_path='/World/envs/env_.*/Robot/.*', update_period=0.,
+                                                                 filter_prim_paths_expr=['/World/Ground/geometry/mesh']))
+            self.scene.sensors['robot_contacts'] = self.contact_sensor
         light = sim_utils.DomeLightCfg(intensity=1800., color=(0.8, 0.8, 0.8))
         light.func('/World/Light', light)
 
@@ -360,8 +407,11 @@ class SnailEnv(DirectRLEnv):
             self.teacher_step = self.teacher_left > 0
             learner = ~self.teacher_step
             if bool(self.teacher_step.any()):
-                goal = self.teacher_keys[self._env_index, self.teacher_key_i.clamp(max=3)]
-                teacher_actions = ((goal - self.home) / self.scale).clamp(-1., 1.)
+                if self.teacher.get('type') == 'hybrid':
+                    teacher_actions = self.hybrid(self.observation_cache)
+                else:
+                    goal = self.teacher_keys[self._env_index, self.teacher_key_i.clamp(max=3)]
+                    teacher_actions = ((goal - self.home) / self.scale).clamp(-1., 1.)
                 actions = torch.where(self.teacher_step[:, None], teacher_actions, actions)
         self.old_target.copy_(self.target)
         unclipped = self.home + torch.clamp(actions, -1., 1.) * self.scale
@@ -372,7 +422,12 @@ class SnailEnv(DirectRLEnv):
         self.command_queue[:, 0] = self.target
         self.previous_x = self.robot.data.root_pos_w[:, 0].clone()
         if teacher_actions is not None:
-            self._advance_teacher(teacher_actions)
+            if self.teacher.get('type') == 'hybrid':
+                active = self.teacher_step
+                self.teacher_left -= active.long()
+                self.handover_pending |= active & (self.teacher_left <= 0)
+            else:
+                self._advance_teacher(teacher_actions)
 
     def _record_speed(self, completed_step):
         if completed_step <= self._speed_sample_counter:
@@ -655,8 +710,10 @@ class SnailEnv(DirectRLEnv):
         bins = ('official_start', 'handover_upright_below_0.2', 'handover_upright_0.2_to_0.5', 'handover_upright_at_least_0.5')
         result = {'stable_definition': 'upright cosine >=0.8 continuously for0.5s, after handover for prefix episodes',
                   'fraction_of_side_starts': self.teacher['fraction'], 'teacher_scripts': self.teacher['names'],
-                  'prefix_steps': {code: table['points'].cpu().tolist() for code, table in
-                                   (('left', self.teacher['sides'][1]), ('right', self.teacher['sides'][2]))},
+                  'prefix_steps': ({'max_upright': int(self.teacher['max_prefix_steps'][0]), 'max_side': int(self.teacher['max_prefix_steps'][1]),
+                                    'distribution': 'uniform 1..max'} if self.teacher.get('type') == 'hybrid' else
+                                   {code: table['points'].cpu().tolist() for code, table in
+                                    (('left', self.teacher['sides'][1]), ('right', self.teacher['sides'][2]))}),
                   'bins': {}}
         for b, name in enumerate(bins):
             result['bins'][name] = {side: dict(zip(names, values))
@@ -772,6 +829,13 @@ class SnailEnv(DirectRLEnv):
         inertias = self.nominal_inertias.clone()
         masses[ids_cpu] *= scales[:, None]
         inertias[ids_cpu] *= scales[:, None, None]
+        if robust and 'distal_mass_scale_range' in self.physics:
+            # Independent extra scale on the distal links (#15): the custom gripper's mass is unknown and distal
+            # mass drives get-up torque more than total mass.
+            distal = uniform(self.physics['distal_mass_scale_range']).cpu()
+            rows, cols = ids_cpu[:, None], self.distal_body_ids_cpu[None, :]
+            masses[rows, cols] *= distal[:, None]
+            inertias[rows, cols] *= distal[:, None, None]
         self.robot.root_physx_view.set_masses(masses, ids_cpu)
         self.robot.root_physx_view.set_inertias(inertias, ids_cpu)
         for range_key, nominal_key, writer, actuator_field in (
