@@ -145,3 +145,20 @@ def test_string_false_does_not_count_as_verified_hardware():
     config['calibration_verified'] = 'false'
     with pytest.raises(ValueError, match='verified'):
         validate_hardware_settings(config, PolicyContract.load(root/'configs/policy.json'))
+
+
+def test_startup_overflow_reports_and_incomplete_packets_are_tolerated_only_during_warmup():
+    from le_snail.hardware import XsensStream
+    stream = XsensStream(np.eye(3), warmup_s=0.5)
+    assert stream.handle(0x42, bytes((0x29,)), 10.0) is None
+    assert stream.handle(0x36, mtdata2(1, 100, quaternion_id=None), 10.1) is None
+    assert stream.handle(0x36, mtdata2(2, 200), 10.2)['seq'] == 2
+    assert (stream.overflow_reports, stream.skipped_warmup_packets) == (1, 1)
+    with pytest.raises(ValueError, match='missing'):
+        stream.handle(0x36, mtdata2(3, 300, quaternion_id=None), 10.6)
+
+
+def test_other_xsens_errors_always_stop_the_stream():
+    from le_snail.hardware import XsensStream
+    with pytest.raises(RuntimeError, match='error code 28'):
+        XsensStream(np.eye(3)).handle(0x42, bytes((0x28,)), 0.0)

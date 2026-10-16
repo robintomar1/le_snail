@@ -223,14 +223,69 @@ class ImuDecoder:
         return {'gravity': gravity, 'gyro': gyro, 'sample_at': sample_at, 'received_at': received_at, 'seq': seq}
 
 
+# XRV_DATAOVERFLOW (xspublic xsresultvalue.h): the device produced more data than the bus carried,
+# observed when the port has not been read for a while. Asynchronous, not a reply to a command.
+XRV_DATAOVERFLOW = 0x29
+
+
+class XsensStream:
+    """Turn Xbus messages into IMU samples, tolerating only the known start-up artefacts.
+
+    When the port opens, the MTi reports any backlog overflow and may send a few packets
+    without orientation. Those are counted and skipped during a short warm-up window; after
+    it, any error message or incomplete packet stops the stream.
+    """
+    def __init__(self, mounting, warmup_s=0.5):
+        self.decoder = ImuDecoder(mounting)
+        self.warmup_s = warmup_s
+        self.started_at = None
+        self.overflow_reports = 0
+        self.skipped_warmup_packets = 0
+
+    def handle(self, mid, payload, received_at):
+        """Return a decoded sample, or None for a message that carries no sample."""
+        if self.started_at is None:
+            self.started_at = received_at
+        if mid == XMID_ERROR:
+            if payload[:1] == bytes((XRV_DATAOVERFLOW,)):
+                self.overflow_reports += 1
+                return None
+            raise RuntimeError(f'Xsens reported error code {payload.hex() or "(none)"}')
+        if mid != XMID_MTDATA2:
+            return None
+        try:
+            return self.decoder.decode(payload, received_at)
+        except ValueError as exc:
+            if received_at - self.started_at <= self.warmup_s and 'missing data identifier' in str(exc):
+                self.skipped_warmup_packets += 1
+                return None
+            raise
+
+
+def enable_low_latency(port):
+    """Ask the USB-serial driver to deliver bytes immediately.
+
+    The dev board's FTDI chip otherwise holds a partly filled USB buffer for its 16 ms latency
+    timer, and every 73-byte MTData2 frame overflows one 62-byte FTDI packet, so samples arrive
+    ~40 ms late in bursts. ftdi_sio maps ASYNC_LOW_LATENCY (user-settable, no root) to 1 ms.
+    Returns False when the platform or driver does not support it.
+    """
+    try:
+        port.set_low_latency_mode(True)
+        return True
+    except (AttributeError, NotImplementedError, OSError, ValueError):
+        return False
+
+
 class ImuSerial:
     """Read an Xsens MTi already in measurement mode. Never writes to the device."""
     def __init__(self, port, mounting, baudrate):
         import serial
         self.serial = serial.Serial(port, baudrate=baudrate, timeout=0.05)
+        self.low_latency = enable_low_latency(self.serial)
         self.serial.reset_input_buffer()
         self.reader = XbusReader()
-        self.decoder = ImuDecoder(mounting)
+        self.stream = XsensStream(mounting)
         self.latest = None
         self.error = None
         self.lock = threading.Lock()
@@ -246,10 +301,8 @@ class ImuSerial:
                     continue
                 received_at = time.monotonic()
                 for mid, payload in self.reader.feed(data):
-                    if mid == XMID_ERROR:
-                        raise RuntimeError(f'Xsens reported error code {payload.hex() or "(none)"}')
-                    if mid == XMID_MTDATA2:
-                        decoded = self.decoder.decode(payload, received_at)
+                    decoded = self.stream.handle(mid, payload, received_at)
+                    if decoded is not None:
                         with self.lock:
                             self.latest = decoded
             except Exception as exc:
