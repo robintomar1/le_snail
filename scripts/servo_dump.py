@@ -12,36 +12,7 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 
-from le_snail.servo_bus import (
-    BAUDRATE, DUMP_RANGES, STS3215_REGISTERS, ServoBus, configure_differences, decode_registers, dump_registers,
-    open_bus_port,
-)
-
-LEROBOT_COMMIT = 'ae2b57f12223c8c5184fcd814eb63cd9ce7de203'
-GRIPPER_ID = 6
-
-
-def dump_arm(bus, ids):
-    servos = {}
-    for servo_id in ids:
-        ping = bus.ping(servo_id)
-        if ping is None:
-            servos[str(servo_id)] = {'answered': False}
-            continue
-        dump = dump_registers(bus, servo_id)
-        values = decode_registers(dump['raw'])
-        servos[str(servo_id)] = {
-            'answered': True,
-            'ping_error': ping[0],
-            'raw': {str(address): byte for address, byte in sorted(dump['raw'].items())},
-            'failed_ranges': dump['failed'],
-            'error_bytes': dump['errors'],
-            'registers': values,
-            'lerobot_configure_would_change': {
-                name: {'present': present, 'after_configure': target}
-                for name, (present, target) in configure_differences(values, servo_id == GRIPPER_ID).items()},
-        }
-    return servos
+from le_snail.servo_bus import BAUDRATE, DUMP_RANGES, LEROBOT_COMMIT, STS3215_REGISTERS, ServoBus, dump_servos, open_bus_port
 
 
 def main():
@@ -55,7 +26,7 @@ def main():
 
     port = open_bus_port(args.port)
     try:
-        servos = dump_arm(ServoBus(port, timeout_s=args.timeout_ms / 1000), args.ids)
+        servos = dump_servos(ServoBus(port, timeout_s=args.timeout_ms / 1000), args.ids)
     finally:
         port.close()
     utc = datetime.now(timezone.utc)

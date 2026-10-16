@@ -13,6 +13,7 @@ import time
 PING, READ, WRITE, SYNC_READ, SYNC_WRITE = 0x01, 0x02, 0x03, 0x82, 0x83
 BROADCAST_ID = 0xFE
 BAUDRATE = 1_000_000
+LEROBOT_COMMIT = 'ae2b57f12223c8c5184fcd814eb63cd9ce7de203'
 
 # name: (address, size in bytes); STS_SMS_SERIES_CONTROL_TABLE at the pinned commit.
 STS3215_REGISTERS = {
@@ -50,6 +51,7 @@ STATE_BLOCK = (56, 15)
 # feetech.py:209-225, config_so_follower.py:45-47). Phase is checked separately: only bit 4 is cleared.
 LEROBOT_CONFIGURE = {'Return_Delay_Time': 0, 'Maximum_Acceleration': 254, 'Acceleration': 254,
                      'Operating_Mode': 0, 'P_Coefficient': 16, 'I_Coefficient': 0, 'D_Coefficient': 32}
+GRIPPER_ID = 6
 LEROBOT_CONFIGURE_GRIPPER = {'Max_Torque_Limit': 500, 'Protection_Current': 250, 'Overload_Torque': 25}
 
 
@@ -163,13 +165,14 @@ class ServoBus:
         return self._transact(sync_read_packet(ids, address, length), list(ids), length)
 
     def sync_write(self, values, address, length):
-        """Broadcast write; servos do not reply. Returns monotonic_ns just before the write."""
+        """Broadcast write; servos do not reply. Returns monotonic_ns before the write and after the flush."""
         if not self.allow_writes:
             raise PermissionError('This bus was opened read-only')
         request = sync_write_packet(values, address, length)
         sent = time.monotonic_ns()
         self.port.write(request)
-        return sent
+        self.port.flush()
+        return sent, time.monotonic_ns()
 
 
 def open_bus_port(path, baudrate=BAUDRATE, serial_factory=None):
@@ -202,6 +205,30 @@ def dump_registers(bus, servo_id, ranges=DUMP_RANGES):
             errors[str(address)] = error
         raw.update({address + i: byte for i, byte in enumerate(params)})
     return {'raw': raw, 'failed': failed, 'errors': errors}
+
+
+def dump_servos(bus, ids, gripper_id=GRIPPER_ID):
+    """{str(id): dump record} for the arm: raw bytes, decoded registers, failed ranges and configure() changes."""
+    servos = {}
+    for servo_id in ids:
+        ping = bus.ping(servo_id)
+        if ping is None:
+            servos[str(servo_id)] = {'answered': False}
+            continue
+        dump = dump_registers(bus, servo_id)
+        values = decode_registers(dump['raw'])
+        servos[str(servo_id)] = {
+            'answered': True,
+            'ping_error': ping[0],
+            'raw': {str(address): byte for address, byte in sorted(dump['raw'].items())},
+            'failed_ranges': dump['failed'],
+            'error_bytes': dump['errors'],
+            'registers': values,
+            'lerobot_configure_would_change': {
+                name: {'present': present, 'after_configure': target}
+                for name, (present, target) in configure_differences(values, servo_id == gripper_id).items()},
+        }
+    return servos
 
 
 def decode_registers(raw):

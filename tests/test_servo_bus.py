@@ -1,7 +1,7 @@
 import pytest
 from le_snail.servo_bus import (
     DUMP_RANGES, PING, READ, STS3215_REGISTERS, ServoBus, StatusReader, configure_differences, decode_registers,
-    decode_sign_magnitude, dump_registers, open_bus_port, status_frame, sts_packet, sync_read_packet,
+    decode_sign_magnitude, dump_registers, dump_servos, open_bus_port, status_frame, sts_packet, sync_read_packet,
 )
 
 
@@ -21,6 +21,9 @@ class FakePort:
     def write(self, data):
         self.written.append(bytes(data))
         self.pending += (bytes(data) if self.echo else b'') + self.replies(bytes(data))
+
+    def flush(self):
+        pass
 
     def read(self, n=1):
         data, self.pending = self.pending[:n], self.pending[n:]
@@ -85,7 +88,8 @@ def test_writes_are_refused_unless_the_bus_was_opened_for_writing():
     with pytest.raises(PermissionError):
         ServoBus(port).sync_write({1: 2048}, 42, 2)
     assert port.written == []
-    ServoBus(port, allow_writes=True).sync_write({1: 2048, 2: 1}, 42, 2)
+    before, after = ServoBus(port, allow_writes=True).sync_write({1: 2048, 2: 1}, 42, 2)
+    assert before <= after
     assert port.written == [sts_packet(0xFE, 0x83, bytes((42, 2, 1, 0x00, 0x08, 2, 0x01, 0x00)))]
 
 
@@ -167,3 +171,19 @@ def test_register_dump_reads_chunks_and_records_ranges_that_fail():
     assert dump['failed'] == [[80, 7]]
     assert dump['errors'] == {}
     assert dump_registers(bus, 2)['failed'] == [list(r) for r in DUMP_RANGES]
+
+
+def test_servo_dump_records_absent_servos_and_what_configure_would_change():
+    memory = [0] * 87
+    memory[3:5] = (0x09, 0x03)
+    memory[21], memory[22], memory[41], memory[85] = 16, 32, 0, 254
+    memory[18] = 0x0C
+
+    def replies(request):
+        if request[4] == PING:
+            return status_frame(request[2], 0) if request[2] == 1 else b''
+        return FakeServos({1: memory})(request)
+    servos = dump_servos(ServoBus(FakePort(replies), timeout_s=0.002), [1, 2])
+    assert servos['2'] == {'answered': False}
+    assert servos['1']['registers']['Model_Number'] == 777
+    assert servos['1']['lerobot_configure_would_change'] == {'Acceleration': {'present': 0, 'after_configure': 254}}

@@ -40,6 +40,7 @@ class SafetyLimits:
     max_current: int = 500                 # ~6.5 mA units, ~3.3 A (provisional)
     max_tracking_error_ticks: int = round(0.35 * TICKS_PER_RAD)  # hardware config max_tracking_error_rad
     max_consecutive_lost: int = 5
+    max_start_drift_ticks: int = round(0.15 * TICKS_PER_RAD)  # hardware config start_tolerance_rad
 
 
 def abort_reason(states, limits, goals=None, consecutive_lost=0):
