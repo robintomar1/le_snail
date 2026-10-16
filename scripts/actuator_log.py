@@ -21,6 +21,7 @@ holds the last goal, still checking the envelope, until the operator presses Ent
 import argparse
 from collections import deque
 from datetime import datetime, timezone
+import gc
 import json
 from pathlib import Path
 import select
@@ -198,6 +199,7 @@ def main():
             recorder.write('Torque_Enable', {sid: 1 for sid in args.ids}, TORQUE_ENABLE)
 
         next_goal = 0
+        gc.disable()  # cyclic GC pauses grow with the log lists (tens of ms on long runs); the loop makes no cycles
         t0 = time.monotonic_ns()
         while (elapsed := (time.monotonic_ns() - t0) / 1e9) < duration:
             if goals is not None and next_goal < len(goals) and elapsed >= next_goal / rate_hz:
@@ -220,6 +222,7 @@ def main():
     except KeyboardInterrupt:
         interrupted = True
     finally:
+        gc.enable()
         if torque_on:
             try:
                 recorder.write('Torque_Enable', {sid: 0 for sid in args.ids}, TORQUE_ENABLE)

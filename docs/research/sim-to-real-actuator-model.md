@@ -484,7 +484,7 @@ Read-only measurements on IDs 1–5 (the gripper servo, ID 6, was unplugged). Ad
 | `Min_` / `Max_Position_Limit` | 806–3520, 947–3303, 789–3010, 1493–3254, 0–4095 | calibration-set; the logger's software window is these minus a margin |
 | **`Goal_Position`** | **0** while torque is off | never enable torque before writing goal = present position |
 
-**Bus rate.** 60 s unpaced dry run: **488 Hz**, 29,299 cycles, **0 lost replies**. Transaction (request to last reply) p50 1.94 ms, p99 2.92 ms, max 4.26 ms; period p50 2.00 ms, p99 3.09 ms. That is about 0.5 ms over the 1.4 ms wire estimate, so a goal write at 50 Hz plus a block read stays well above the 100–300 Hz target.
+**Bus rate.** 60 s unpaced dry run: **488 Hz**, 29,299 cycles, **0 lost replies**. Transaction (request to last reply) p50 1.94 ms, p99 2.92 ms, max 4.26 ms; period p50 2.00 ms, p99 3.09 ms. That is about 0.5 ms over the 1.4 ms wire estimate. **Reads only:** goal writes (with a flush each) have not been timed, because writes need an approved powered run. A 50 Hz goal write should cost little next to ~490 reads/s, but that is an estimate until the first motion log.
 
 ## Not verified
 
