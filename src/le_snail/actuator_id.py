@@ -171,3 +171,25 @@ def plan_motion(present, start, offsets, lower, upper, ramp_s, rate_hz):
         outside = np.flatnonzero(np.any((motion < np.asarray(lower)) | (motion > np.asarray(upper)), axis=0))
         raise ValueError(f'Goals leave the window on joints {outside.tolist()}')
     return np.concatenate([ramp(np.asarray(present), np.asarray(start), ramp_s, rate_hz), motion])
+
+
+def step_metrics(t, pos, t_cmd, goal, t_end, settle_s=0.2, move_ticks=2):
+    """Response of one joint to a goal step at t_cmd (seconds, ticks); fractions are of the distance to travel.
+
+    Dead time is to the first move of `move_ticks` from the pre-step median; rise and overshoot are relative
+    to goal - start, so a servo that stops short of the goal (static friction, no integral term) shows a
+    final error rather than a failed rise.
+    """
+    t, pos = np.asarray(t, dtype=float), np.asarray(pos, dtype=float)
+    start = float(np.median(pos[(t >= t_cmd - 0.1) & (t < t_cmd)]))
+    window = (t >= t_cmd) & (t < t_end)
+    tt, x = t[window] - t_cmd, (pos[window] - start) / (goal - start)
+
+    def first(mask):
+        hits = np.flatnonzero(mask)
+        return float(tt[hits[0]]) if len(hits) else float('nan')
+    final = float(np.median(pos[window][tt >= tt[-1] - settle_s]))
+    return {'start_ticks': start, 'step_ticks': goal - start,
+            'dead_time_s': first(np.abs(pos[window] - start) >= move_ticks),
+            'rise_10_90_s': first(x >= 0.9) - first(x >= 0.1), 'time_to_90_s': first(x >= 0.9),
+            'overshoot': max(0.0, float(x.max()) - 1), 'final_error_ticks': final - goal}

@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 from le_snail.actuator_id import (
-    EnvelopeMonitor, SafetyLimits, abort_reason, chirp, closest_recent_goal, plan_motion, decode_state, hold_then, joint_window, ramp, rate_summary, steps,
+    EnvelopeMonitor, SafetyLimits, abort_reason, chirp, closest_recent_goal, plan_motion, step_metrics, decode_state, hold_then, joint_window, ramp, rate_summary, steps,
 )
 from le_snail.servo_bus import STATE_BLOCK
 
@@ -138,3 +138,17 @@ def test_monitor_keeps_fast_checks_instant():
     monitor = EnvelopeMonitor(LIMITS)
     assert 'load' in monitor.check({1: decode_state(block(load=950))})
     assert 'status' in EnvelopeMonitor(LIMITS).check({1: decode_state(block(status=0x20))})
+
+
+def test_step_metrics_recover_delay_rise_and_final_error_of_a_synthetic_servo():
+    t = np.arange(0, 1.0, 0.002)
+    t_cmd, delay, tau, start, goal, short = 0.2, 0.05, 0.04, 2000, 2100, -3
+    moving = np.clip(t - t_cmd - delay, 0, None)
+    pos = np.rint(start + (goal + short - start) * (1 - np.exp(-moving / tau)))
+    m = step_metrics(t, pos, t_cmd=t_cmd, goal=goal, t_end=1.0)
+    assert m['dead_time_s'] == pytest.approx(delay, abs=0.004)
+    reach = goal + short - start  # rise is measured against the distance to the goal, which it stops short of
+    assert m['rise_10_90_s'] == pytest.approx(tau * np.log((reach - 10) / (reach - 90)), abs=0.006)
+    assert m['final_error_ticks'] == pytest.approx(short, abs=1)
+    assert m['overshoot'] == 0
+    assert m['start_ticks'] == start and m['step_ticks'] == goal - start
