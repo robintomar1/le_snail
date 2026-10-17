@@ -5,6 +5,22 @@
   "imu_i2c_bus": 3,
   "imu_note": "BNO085 at 0x4A on the Pi's bit-banged i2c-gpio bus 3 (GPIO2/3, same pins as hardware bus 1)",
   "joint_map": "configs/joint-maps/snail_2-2026-10-17.json",
-  "imu_rotation_base_from_sensor": null,
-  "imu_rotation_note": "NOT MEASURED: take the 3 static poses on snail_2 before any run"
+  "imu_rotation_base_from_sensor": [
+    [
+      -0.0511,
+      0.0495,
+      -0.9975
+    ],
+    [
+      0.0252,
+      0.9985,
+      0.0482
+    ],
+    [
+      0.9984,
+      -0.0227,
+      -0.0523
+    ]
+  ],
+  "imu_rotation_note": "Measured 2026-10-17 from gravity: base upright and level (sensor g = [-0.9984, 0.0227, 0.0523]) and lying on its left side (sensor g = [0.3498, 0.9364, 0.0285], 19 deg off a pure side); sign fixed by the board facing away on the base back face. Sensor x = base up, y = base left, z = backward, ~3 deg lean. The CAD imu_link (x left, y down) is 90 deg off in the board plane. Readings: runs/snail_2/imu-mount/"
 }
