@@ -231,3 +231,18 @@ def test_joint_map_soft_window_tightens_the_eeprom_window(run, tmp_path):
     meta = run(sim, make_bundle(tmp_path / 'b', [1.0] + [0.0] * 5), extra=['--allow-unvalidated-physics', '--seconds', '1.5'])
     assert meta['window_ticks'][0][0] == 1124 and meta['window_ticks'][1][0] == 2700
     assert meta['log']['command_goal_ticks'][:, 0].max() == 2700
+
+
+def test_a_slow_first_step_anchors_the_schedule_instead_of_aborting(run, tmp_path, monkeypatch):
+    from le_snail import contract as contract_module
+    original, calls = contract_module.PolicyContract.observation, {'n': 0}
+
+    def slow_first(self, *a):
+        calls['n'] += 1
+        if calls['n'] == 1:
+            time.sleep(0.04)        # e.g. first-call warm-up on the target computer
+        return original(self, *a)
+    monkeypatch.setattr(contract_module.PolicyContract, 'observation', slow_first)
+    meta = run(SimServos(), make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics'])
+    assert meta['abort'] is None and meta['policy_steps'] >= 12
+    assert meta['log']['lateness_s'][0] > 0.03 and np.all(meta['log']['lateness_s'][1:] < 0.01)

@@ -91,7 +91,8 @@ class Steps:
     """Per-policy-step log."""
     def __init__(self):
         self.rows = {k: [] for k in ('step_time_s', 'joint_rad', 'velocity', 'gravity', 'gyro', 'observation', 'action',
-                                     'target_rad', 'goal_ticks', 'clipped', 'imu_seq', 'imu_age_s', 'state_age_s')}
+                                     'target_rad', 'goal_ticks', 'clipped', 'imu_seq', 'imu_age_s', 'state_age_s',
+                                     'lateness_s', 'phase_s')}
 
     def add(self, **values):
         for key, value in values.items():
@@ -221,6 +222,7 @@ def main():
             abort = recorder.cycle()
             if abort:
                 break
+            t_cycle = time.monotonic()
             if recorder.last_complete is None or recorder.last_complete[0] == last_state_ns:
                 abort = f'no fresh complete servo state for step {k}'
                 break
@@ -235,6 +237,7 @@ def main():
             except RuntimeError as error:
                 abort = f'IMU: {error}' + (f' ({error.__cause__!r})' if error.__cause__ else '')
                 break
+            t_imu = time.monotonic()
             ticks = np.array([states[sid]['position'] for sid in jmap.ids])
             q = jmap.to_rad(ticks, virtual_rad=target if target is not None else home)
             velocity = estimator.update(q, state_ns / 1e9)
@@ -253,16 +256,22 @@ def main():
             goal = np.clip(raw_goal, lower, upper)
             # Tick rounding can land a hair outside a contract limit; the next position_target would reject it.
             applied = np.clip(jmap.to_rad(goal, virtual_rad=candidate), contract.lower_rad, contract.upper_rad)
+            t_compute = time.monotonic()
+            late = t_compute - slot
             if live:
-                late = time.monotonic() - slot
-                if late > 0.5 * dt:
+                # Step 0 follows the settle hold, so it has no earlier slot to be late for; the schedule is anchored
+                # at its command instead. Every later step must go out within half a period of its slot.
+                if k and late > 0.5 * dt:
                     abort = f'control deadline missed: step {k} command {late * 1e3:.1f} ms after its slot'
                     break
                 recorder.command(goal)
                 target = applied
             steps.add(step_time_s=now - start, joint_rad=q, velocity=velocity, gravity=sample['gravity'], gyro=sample['gyro'],
                       observation=observation, action=action, target_rad=applied, goal_ticks=goal, clipped=goal != raw_goal,
-                      imu_seq=sample['seq'], imu_age_s=time.monotonic() - sample['sample_at'], state_age_s=state_age)
+                      imu_seq=sample['seq'], imu_age_s=time.monotonic() - sample['sample_at'], state_age_s=state_age,
+                      lateness_s=late, phase_s=(t_cycle - now, t_imu - t_cycle, t_compute - t_imu))
+            if k == 0:
+                start = time.monotonic()
             k += 1
         if torque_on and abort is None:
             print('Policy finished, holding the last goal. Support the robot, then press Enter to release torque.')
