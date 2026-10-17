@@ -213,6 +213,8 @@ def main():
             if now < slot:
                 if slot - now > cycle_budget:
                     abort = recorder.cycle()
+                else:
+                    time.sleep(slot - now)   # never spin: the IMU reader thread needs the GIL
                 continue
             abort = recorder.cycle()
             if abort:
