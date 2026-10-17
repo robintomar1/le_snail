@@ -21,5 +21,9 @@
       -0.02
     ]
   ],
-  "imu_rotation_note": "2026-10-16 three-pose rotation (#11), re-levelled 2026-10-17 13:05Z on the Rubik Pi from a flat-base reading (sensor g [-1.0, -0.006, 0.02]; old rotation gave base g [-0.128, 0.024, -0.991], 7.4 deg off) by the minimal rotation; yaw about base z kept from the 2026-10-16 measurement"
+  "imu_rotation_note": "2026-10-16 three-pose rotation (#11), re-levelled 2026-10-17 13:05Z on the Rubik Pi from a flat-base reading (sensor g [-1.0, -0.006, 0.02]; old rotation gave base g [-0.128, 0.024, -0.991], 7.4 deg off) by the minimal rotation; yaw about base z kept from the 2026-10-16 measurement",
+  "cpu_affinity": [
+    7
+  ],
+  "cpu_affinity_note": "Rubik Pi (QCS6490): core 7 is the fastest core; unpinned the 50 Hz loop computed a step in ~12 ms, pinned ~2 ms"
 }

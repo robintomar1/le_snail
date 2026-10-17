@@ -24,6 +24,7 @@ import argparse
 from datetime import datetime, timezone
 import gc
 import hashlib
+import os
 import json
 from pathlib import Path
 import sys
@@ -134,6 +135,10 @@ def main():
     if hardware.get('imu_rotation_base_from_sensor') is None:
         raise SystemExit(f'{args.hardware}: imu_rotation_base_from_sensor is not measured for this arm; measure the IMU mounting first')
     rotation = proper_rotation(hardware['imu_rotation_base_from_sensor'])
+    if hardware.get('cpu_affinity'):
+        # On big.LITTLE boards an unpinned, mostly-sleeping loop lands on slow or clocked-down cores: one policy
+        # step took ~12 ms unpinned vs ~2 ms on a big core of the Rubik Pi (2026-10-17).
+        os.sched_setaffinity(0, hardware['cpu_affinity'])
     joint_map_path = Path(hardware['joint_map'])
     joint_map = json.loads(joint_map_path.read_text())
     contract, manifest = load_bundle(args.bundle)
@@ -309,7 +314,7 @@ def main():
             'contract_fingerprint': contract.fingerprint, 'physics_validated': manifest.get('physics_validated'),
             'physics_override': bool(live and args.allow_unvalidated_physics and not manifest.get('physics_validated')),
             'hardware': hardware, 'joint_map_sha256': sha256(joint_map_path), 'servo_ids': jmap.ids,
-            'virtual_joints': jmap.virtual, 'seconds': args.seconds, 'ramp_s': args.ramp_s, 'margin_ticks': args.margin_ticks,
+            'virtual_joints': jmap.virtual, 'cpu_affinity': hardware.get('cpu_affinity'), 'seconds': args.seconds, 'ramp_s': args.ramp_s, 'margin_ticks': args.margin_ticks,
             'window_ticks': [lower.tolist(), upper.tolist()] if servos_before else None,
             'max_feedback_age_s': args.max_feedback_age_s, 'max_imu_age_s': args.max_imu_age_s, 'settle_s': args.settle_s, 'imu_rotation_used': rotation.tolist(), 'state_block': list(STATE_BLOCK), 'safety_limits': limits.__dict__,
             'policy_steps': len(steps.rows['step_time_s']), 'torque_release': torque_release, 'abort': abort, 'interrupted': interrupted, 'finished': finished,

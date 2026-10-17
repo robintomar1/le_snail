@@ -246,3 +246,15 @@ def test_a_slow_first_step_anchors_the_schedule_instead_of_aborting(run, tmp_pat
     meta = run(SimServos(), make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics'])
     assert meta['abort'] is None and meta['policy_steps'] >= 12
     assert meta['log']['lateness_s'][0] > 0.03 and np.all(meta['log']['lateness_s'][1:] < 0.01)
+
+
+def test_cpu_affinity_from_the_hardware_config_is_applied(run, tmp_path, monkeypatch):
+    import os
+    hw = tmp_path / 'hw.json'
+    config = json.loads(hw.read_text())
+    config['cpu_affinity'] = [0]
+    hw.write_text(json.dumps(config))
+    applied = []
+    monkeypatch.setattr(os, 'sched_setaffinity', lambda pid, cpus: applied.append((pid, set(cpus))))
+    meta = run(SimServos(), make_bundle(tmp_path / 'b', [0.0] * 6), mode='shadow')
+    assert applied == [(0, {0})] and meta['cpu_affinity'] == [0]
