@@ -186,6 +186,20 @@ def _xsens_item(items, data_type, count, fmt, *, enu=False):
     return struct.unpack(f'>{count}{fmt}', data)
 
 
+def mtdata2_fields(items):
+    """[counter, sample_time_fine, qw, qx, qy, qz, gx, gy, gz, ax, ay, az] for logging; NaN where absent.
+
+    Unlike ImuDecoder this never raises on a missing item, so start-up packets are kept in the log.
+    """
+    def item(data_type, count, fmt):
+        try:
+            return list(_xsens_item(items, data_type, count, fmt, enu=data_type == XDI_QUATERNION))
+        except ValueError:
+            return [math.nan] * count
+    return (item(XDI_PACKET_COUNTER, 1, 'H') + item(XDI_SAMPLE_TIME_FINE, 1, 'I') + item(XDI_QUATERNION, 4, 'f')
+            + item(XDI_RATE_OF_TURN, 3, 'f') + item(XDI_ACCELERATION, 3, 'f'))
+
+
 class ImuDecoder:
     """Decode Xsens MTData2 orientation/gyro packets into base-frame gravity and angular rate."""
     def __init__(self, mounting):
