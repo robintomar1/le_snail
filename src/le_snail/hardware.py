@@ -389,10 +389,11 @@ class Bno085Imu:
                 self.device.enable_feature(BNO_REPORT_GYROSCOPE, self.REPORT_INTERVAL_US)
                 time.sleep(0.2)
                 break
-            except Exception:
+            except Exception as exc:
                 if attempt == attempts - 1:
-                    raise RuntimeError(f'BNO085 init failed on I2C bus {bus} (power-cycle the sensor)') from None
-                time.sleep(1.0)
+                    raise RuntimeError(f'BNO085 init failed on I2C bus {bus} after {attempts} attempts: {exc!r} '
+                                       '(power-cycle the sensor)') from exc
+                time.sleep(1.5)
         self.poll_s, self.latest, self.error, self.seq = poll_s, None, None, 0
         self.lock = threading.Lock()
         self.stop = threading.Event()
