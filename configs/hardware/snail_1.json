@@ -4,6 +4,22 @@
   "imu_port": "/dev/serial/by-id/usb-Xsens_Motion_Tracker_Dev._Board_DB2GZ7KQ-if00-port0",
   "imu_baudrate": 115200,
   "joint_map": "configs/joint-maps/so101-esp32-arm-2026-10-17.json",
-  "imu_rotation_base_from_sensor": [[0.108, 0.0016, -0.9942], [-0.03, 0.9995, -0.0016], [0.9937, 0.03, 0.108]],
-  "imu_rotation_note": "Xsens zip-tied on the base back face; 3 static poses 2026-10-16 (#11), provisional until a rigid mount"
+  "imu_rotation_base_from_sensor": [
+    [
+      -0.02,
+      -0.0007,
+      -0.9998
+    ],
+    [
+      -0.006,
+      1.0,
+      -0.0006
+    ],
+    [
+      0.9998,
+      0.006,
+      -0.02
+    ]
+  ],
+  "imu_rotation_note": "2026-10-16 three-pose rotation (#11), re-levelled 2026-10-17 13:05Z on the Rubik Pi from a flat-base reading (sensor g [-1.0, -0.006, 0.02]; old rotation gave base g [-0.128, 0.024, -0.991], 7.4 deg off) by the minimal rotation; yaw about base z kept from the 2026-10-16 measurement"
 }
