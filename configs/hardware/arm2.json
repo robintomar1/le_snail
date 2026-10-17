@@ -1,0 +1,14 @@
+{
+  "arm": "arm 2 = snail_2, the hackathon arm (LeRobot calibration ../S0101-hackathon-arm/so101_follower_new.json = configs/calibration/snail_2/so101_follower_new.json), on the Rubik Pi with the Xsens",
+  "servo_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5AE6057765-if00",
+  "imu_type": "xsens",
+  "imu_port": "/dev/serial/by-id/usb-Xsens_Motion_Tracker_Dev._Board_DB2GZ7KQ-if00-port0",
+  "imu_baudrate": 115200,
+  "joint_map": "configs/joint-maps/snail_2-2026-10-17.json",
+  "cpu_affinity": [
+    7
+  ],
+  "cpu_affinity_note": "Rubik Pi (QCS6490): core 7 is the fastest core",
+  "imu_rotation_base_from_sensor": null,
+  "imu_rotation_note": "NOT MEASURED for the Xsens on this arm: base flat reading + forward-tilt check first"
+}
