@@ -109,8 +109,9 @@ def load_physics(path):
             bounds = reward.get(key, [])
             if len(bounds) != 2 or not all(math.isfinite(b) for b in bounds) or not -1 <= bounds[0] < bounds[1] <= 1:
                 raise ValueError(f'Reward {key} must be an increasing cosine interval within [-1, 1]')
-        if 'forward_requires_crawl_mode' in reward and type(reward['forward_requires_crawl_mode']) is not bool:
-            raise ValueError('Reward forward_requires_crawl_mode must be a boolean')
+        for key in ('forward_requires_crawl_mode', 'heading_requires_crawl_mode'):
+            if key in reward and type(reward[key]) is not bool:
+                raise ValueError(f'Reward {key} must be a boolean')
         digest = reward.get('getup_progress_bank_sha256', '')
         if not reward.get('getup_progress_bank') or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
             raise ValueError('Reward needs a get-up progress bank path and its sha256')

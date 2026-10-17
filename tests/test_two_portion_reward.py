@@ -154,6 +154,20 @@ def test_lane_heading_and_contact_terms():
     assert _refined(lying, yaw=2., contact=True)['heading'] == 0. and _refined(lying, contact=True)['contact'] == 0.
 
 
+def test_heading_can_be_limited_to_crawl_mode():
+    config = {**REFINED, 'heading_per_s': 1., 'heading_band_deg': [15., 60.], 'heading_requires_crawl_mode': True}
+    upright = _gravity(0., 20.)
+
+    def heading(crawling):
+        terms, _, _ = two_portion_terms(config, _far_bank(), upright=-upright[:, 2], features=torch.zeros((1, 9)), x=torch.tensor([.1]),
+                                        x_record=torch.tensor([0.]), previous_phi=torch.tensor([float('nan')]), terminated=torch.tensor([False]),
+                                        command_rate=torch.zeros((1, 6)), dt=.02, gamma=.998, crawling=torch.tensor([crawling]), gravity=upright,
+                                        lateral=torch.tensor([0.]), yaw=torch.tensor([-math.radians(75)]), other_contact=torch.tensor([False]))
+        return float(terms['heading'][0])
+    assert heading(False) == 0.
+    assert heading(True) == pytest.approx(-1. * .02)
+
+
 def test_configs_without_refinements_are_unchanged():
     terms = _refined(_gravity(0., 20.), config=CONFIG)
     assert set(terms) == {'getup_progress', 'standing', 'forward', 'effort'}
