@@ -1,9 +1,10 @@
 {
-  "arm": "snail_2 (second SO-101 unit, gripper servo id 6)",
+  "arm": "snail_2 (second SO-101 unit, gripper servo id 6), run from the Raspberry Pi 5 'biped'",
   "servo_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5837053111-if00",
-  "imu_port": "/dev/serial/by-id/usb-Xsens_Motion_Tracker_Dev._Board_DB2GZ7KQ-if00-port0",
-  "imu_baudrate": 115200,
+  "imu_type": "bno085",
+  "imu_i2c_bus": 3,
+  "imu_note": "BNO085 at 0x4A on the Pi's bit-banged i2c-gpio bus 3 (GPIO2/3, same pins as hardware bus 1)",
   "joint_map": "configs/joint-maps/snail_2-2026-10-17.json",
   "imu_rotation_base_from_sensor": null,
-  "imu_rotation_note": "NOT MEASURED: mount the Xsens on snail_2's base and take the 3 static poses (#11 procedure) before any run"
+  "imu_rotation_note": "NOT MEASURED: take the 3 static poses on snail_2 before any run"
 }

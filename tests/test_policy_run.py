@@ -81,7 +81,7 @@ def run(tmp_path, monkeypatch):
     def go(sim, bundle, mode='live', extra=(), imu=None):
         imu = imu or FakeImu()
         monkeypatch.setattr(module, 'open_bus_port', lambda path: sim)
-        monkeypatch.setattr(module, 'open_imu', lambda port, rotation, baudrate: imu)
+        monkeypatch.setattr(module, 'open_imu', lambda hardware, rotation: imu)
         monkeypatch.setattr(module, 'stdin_has_line', lambda: True)
         monkeypatch.setattr('sys.stdin', io.StringIO('\n'))
         monkeypatch.setattr('builtins.input', lambda prompt='': 'RUN POLICY')

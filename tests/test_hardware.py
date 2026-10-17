@@ -172,3 +172,48 @@ def test_mtdata2_fields_extracts_every_logged_quantity_and_marks_missing_ones_na
     np.testing.assert_allclose(fields[2:], [0.5, 0.5, 0.5, 0.5, 1, 2, 3, 0.1, 0.2, 9.8], rtol=1e-6)
     missing = mtdata2_fields(parse_mtdata2(mtdata2(8, 1300, quaternion_id=None)))
     assert missing[:2] == [8, 1300] and np.all(np.isnan(missing[2:6])) and np.all(np.isnan(missing[9:]))
+
+
+class FakeBno:
+    """Adafruit BNO08X stand-in: quaternion (i, j, k, real) tilted 30 deg about x, gyro with fresh noise per report."""
+    def __init__(self):
+        self.frozen, self.n, self.enabled = False, 0, []
+
+    def enable_feature(self, feature, report_interval=50000):
+        self.enabled.append((feature, report_interval))
+
+    @property
+    def game_quaternion(self):
+        s, c = np.sin(np.radians(15)), np.cos(np.radians(15))
+        return (s, 0.0, 0.0, c)
+
+    @property
+    def gyro(self):
+        if not self.frozen:
+            self.n += 1
+        return (0.0, 0.0, 0.1 + 1e-4 * self.n)
+
+
+def test_bno085_gives_base_frame_gravity_and_goes_stale_when_reports_stop():
+    import time
+    from le_snail.hardware import Bno085Imu
+    fake = FakeBno()
+    imu = Bno085Imu(3, np.eye(3), device_factory=lambda bus: fake, poll_s=0.002)
+    try:
+        assert len(fake.enabled) == 2 and all(interval == 10000 for _, interval in fake.enabled)
+        deadline = time.monotonic() + 1
+        while time.monotonic() < deadline:
+            try:
+                sample = imu.read(0.05)
+                break
+            except RuntimeError:
+                time.sleep(0.01)
+        # Sensor tilted +30 deg about x: gravity (world -z) seen in the sensor frame.
+        assert np.allclose(sample['gravity'], [0.0, -np.sin(np.radians(30)), -np.cos(np.radians(30))], atol=1e-6)
+        assert sample['gyro'][2] == pytest.approx(0.1, abs=0.01)
+        fake.frozen = True
+        time.sleep(0.1)
+        with pytest.raises(RuntimeError, match='Stale'):
+            imu.read(0.05)
+    finally:
+        imu.close()

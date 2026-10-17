@@ -340,3 +340,89 @@ class ImuSerial:
         self.stop.set()
         self.thread.join(timeout=0.2)
         self.serial.close()
+
+
+# SH-2 report ids (same values as adafruit_bno08x.BNO_REPORT_*), so tests need no Adafruit install.
+BNO_REPORT_GYROSCOPE = 0x02
+BNO_REPORT_GAME_ROTATION_VECTOR = 0x08
+
+
+def _adafruit_bno085(bus):
+    from adafruit_bno08x.i2c import BNO08X_I2C
+    from adafruit_extended_bus import ExtendedI2C
+    return BNO08X_I2C(ExtendedI2C(bus))
+
+
+class Bno085Imu:
+    """BNO085 on I2C (Adafruit driver): game rotation vector + gyro, polled on a thread.
+
+    Same read() contract as ImuSerial (base-frame gravity unit vector and angular rate, sample freshness).
+    The game rotation vector is gravity-referenced with free yaw, which is all the policy uses. The driver
+    caches the last report, so a sample counts as new only when the values change; sensor noise makes
+    consecutive reports differ, and frozen values age out as stale. Reports are requested at 100 Hz
+    (the Adafruit default is 20 Hz, too slow for a 50 Hz policy). On a Raspberry Pi use the bit-banged
+    i2c-gpio bus: the BNO085's clock stretching upsets the hardware I2C controller.
+    """
+    REPORT_INTERVAL_US = 10000
+
+    def __init__(self, bus, mounting, device_factory=_adafruit_bno085, poll_s=0.004, attempts=4):
+        self.mounting = mounting
+        for attempt in range(attempts):
+            try:
+                self.device = device_factory(bus)
+                self.device.enable_feature(BNO_REPORT_GAME_ROTATION_VECTOR, self.REPORT_INTERVAL_US)
+                time.sleep(0.2)
+                self.device.enable_feature(BNO_REPORT_GYROSCOPE, self.REPORT_INTERVAL_US)
+                time.sleep(0.2)
+                break
+            except Exception:
+                if attempt == attempts - 1:
+                    raise RuntimeError(f'BNO085 init failed on I2C bus {bus} (power-cycle the sensor)') from None
+                time.sleep(1.0)
+        self.poll_s, self.latest, self.error, self.seq = poll_s, None, None, 0
+        self.lock = threading.Lock()
+        self.stop = threading.Event()
+        self.thread = threading.Thread(target=self._read, daemon=True)
+        self.thread.start()
+
+    def _read(self):
+        last = None
+        failures = 0
+        while not self.stop.is_set():
+            try:
+                i, j, k, real = self.device.game_quaternion
+                gyro = self.device.gyro
+                failures = 0
+            except Exception as exc:  # occasional I2C hiccups; a persistent failure ends the stream
+                failures += 1
+                if failures > 50:
+                    with self.lock:
+                        self.error = exc
+                    return
+                time.sleep(self.poll_s)
+                continue
+            values = (real, i, j, k, *gyro)
+            if values != last:
+                last = values
+                now = time.monotonic()
+                gravity, rate = imu_base_vectors((real, i, j, k), gyro, self.mounting)
+                self.seq += 1
+                with self.lock:
+                    self.latest = {'gravity': gravity, 'gyro': rate, 'sample_at': now, 'received_at': now, 'seq': self.seq,
+                                   'quaternion_wxyz': (real, i, j, k)}
+            time.sleep(self.poll_s)
+
+    def read(self, max_age_s):
+        with self.lock:
+            if self.error is not None:
+                raise RuntimeError('IMU stream failed') from self.error
+            result = self.latest
+        if result is None:
+            raise RuntimeError('No IMU sample received')
+        if time.monotonic() - result['received_at'] > max_age_s:
+            raise RuntimeError('Stale IMU sample')
+        return result
+
+    def close(self):
+        self.stop.set()
+        self.thread.join(timeout=0.2)

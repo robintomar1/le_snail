@@ -36,7 +36,7 @@ from actuator_log import ACCELERATION, GOAL_POSITION, TORQUE_ENABLE, Recorder, m
 from le_snail.actuator_id import TICKS_PER_RAD, JointTickMap, SafetyLimits, ramp  # noqa: E402
 from le_snail.bundle import load_bundle  # noqa: E402
 from le_snail.contract import VelocityEstimator  # noqa: E402
-from le_snail.hardware import ImuSerial  # noqa: E402
+from le_snail.hardware import Bno085Imu, ImuSerial  # noqa: E402
 from le_snail.servo_bus import STATE_BLOCK, ServoBus, dump_servos, open_bus_port  # noqa: E402
 
 MAX_SECONDS = 30.0
@@ -76,8 +76,11 @@ def first_imu_sample(imu, max_age_s, wait_s=2.0):
             time.sleep(0.02)
 
 
-def open_imu(port, rotation, baudrate):
-    return ImuSerial(port, rotation, baudrate)
+def open_imu(hardware, rotation):
+    """hardware['imu_type']: 'xsens' (default; Xbus over USB serial) or 'bno085' (I2C, bus imu_i2c_bus)."""
+    if hardware.get('imu_type', 'xsens') == 'bno085':
+        return Bno085Imu(hardware['imu_i2c_bus'], rotation)
+    return ImuSerial(hardware['imu_port'], rotation, hardware.get('imu_baudrate') or 115200)
 
 
 def sha256(path):
@@ -107,7 +110,7 @@ class Steps:
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--hardware', type=Path, required=True,
-                        help='JSON: servo_port, imu_port, imu_baudrate, joint_map, imu_rotation_base_from_sensor')
+                        help='JSON: servo_port, joint_map, imu_rotation_base_from_sensor, imu_type (xsens: imu_port, imu_baudrate; bno085: imu_i2c_bus)')
     parser.add_argument('--bundle', type=Path, required=True)
     parser.add_argument('--mode', choices=('shadow', 'live'), default='shadow')
     parser.add_argument('--seconds', type=float, default=10.0)
@@ -144,7 +147,7 @@ def main():
     with torch.inference_mode():
         policy(torch.zeros((1, 24)))
 
-    imu = open_imu(hardware['imu_port'], rotation, hardware.get('imu_baudrate') or 115200)
+    imu = open_imu(hardware, rotation)
     port = open_bus_port(hardware['servo_port'])
     bus = ServoBus(port, timeout_s=args.timeout_ms / 1000, allow_writes=live)
     recorder = Recorder(bus, jmap.ids, limits)
