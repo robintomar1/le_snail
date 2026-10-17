@@ -1,0 +1,54 @@
+{
+  "stage": "crawl",
+  "seed": 101,
+  "iterations": 50,
+  "num_envs": 2048,
+  "runner": {
+    "seed": 101,
+    "device": "cuda:0",
+    "num_steps_per_env": 64,
+    "save_interval": 50,
+    "logger": "tensorboard",
+    "obs_groups": {
+      "policy": [
+        "policy"
+      ],
+      "critic": [
+        "policy"
+      ]
+    },
+    "policy": {
+      "class_name": "ActorCritic",
+      "init_noise_std": 0.5,
+      "actor_obs_normalization": true,
+      "critic_obs_normalization": true,
+      "actor_hidden_dims": [
+        128,
+        128
+      ],
+      "critic_hidden_dims": [
+        128,
+        128
+      ],
+      "activation": "elu"
+    },
+    "algorithm": {
+      "class_name": "PPO",
+      "value_loss_coef": 1.0,
+      "use_clipped_value_loss": true,
+      "clip_param": 0.2,
+      "entropy_coef": 0.01,
+      "num_learning_epochs": 5,
+      "num_mini_batches": 8,
+      "learning_rate": 0.0003,
+      "schedule": "adaptive",
+      "gamma": 0.995,
+      "lam": 0.95,
+      "desired_kl": 0.01,
+      "max_grad_norm": 1.0
+    }
+  },
+  "source_sha256": "801b7df420ad266c041fc4ec658bb721515c1bfa3cf31b27fb48fc2ca3ac0851",
+  "resume_checkpoint": "/workspace/le_snail/runs/diversity-seed101-001-050/model_final.pt",
+  "resume_checkpoint_sha256": "1ad72d084d2a9a18b9d81ff5f01985821f8768731fd5e68587ee862737cc7156"
+}

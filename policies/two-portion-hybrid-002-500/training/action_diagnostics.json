@@ -1,0 +1,217 @@
+{
+  "joint_names": [
+    "shoulder_pan",
+    "shoulder_lift",
+    "elbow_flex",
+    "wrist_flex",
+    "wrist_roll",
+    "gripper"
+  ],
+  "all": {
+    "policy_steps": 16000,
+    "samples_per_joint": 115106612,
+    "counts_per_joint": {
+      "raw_out_of_range": [
+        82939633,
+        84683619,
+        84239020,
+        78844499,
+        85527277,
+        97255571
+      ],
+      "joint_limit_clipped": [
+        0,
+        30768383,
+        50192553,
+        45048020,
+        0,
+        54558270
+      ],
+      "slew_limited": [
+        112358241,
+        104406239,
+        114016589,
+        108526188,
+        101832908,
+        95487851
+      ],
+      "controller_at_slew_bound": [
+        112732532,
+        107071954,
+        114201749,
+        110409520,
+        104867020,
+        101293082
+      ],
+      "desired_at_joint_bound": [
+        0,
+        30768384,
+        50192557,
+        45048022,
+        0,
+        54558270
+      ]
+    },
+    "fractions_per_joint": {
+      "raw_out_of_range": [
+        0.720546209804177,
+        0.7356972595110348,
+        0.7318347620204476,
+        0.6849693308669358,
+        0.74302662126829,
+        0.8449173275988698
+      ],
+      "joint_limit_clipped": [
+        0.0,
+        0.2673033500456082,
+        0.4360527351808426,
+        0.39135909933653507,
+        0.0,
+        0.47398033051307253
+      ],
+      "slew_limited": [
+        0.9761232569333202,
+        0.9070394583414548,
+        0.9905303181019697,
+        0.9428319200290597,
+        0.8846833924709729,
+        0.8295600864353474
+      ],
+      "controller_at_slew_bound": [
+        0.9793749467667417,
+        0.9301981192878824,
+        0.9921389137923718,
+        0.9591935518004822,
+        0.9110425385467865,
+        0.8799936010626392
+      ],
+      "desired_at_joint_bound": [
+        0.0,
+        0.2673033587332064,
+        0.4360527699312356,
+        0.39135911671173157,
+        0.0,
+        0.47398033051307253
+      ]
+    },
+    "fractions_all_joints": {
+      "raw_out_of_range": 0.7434985851782925,
+      "joint_limit_clipped": 0.26144925251267637,
+      "slew_limited": 0.9217947387186874,
+      "controller_at_slew_bound": 0.9419902785428174,
+      "desired_at_joint_bound": 0.26144926264820767
+    }
+  },
+  "initial": {
+    "policy_steps": 64,
+    "samples_per_joint": 280620,
+    "counts_per_joint": {
+      "raw_out_of_range": [
+        180619,
+        203880,
+        192059,
+        180530,
+        187704,
+        229271
+      ],
+      "joint_limit_clipped": [
+        0,
+        49728,
+        112144,
+        76901,
+        0,
+        122411
+      ],
+      "slew_limited": [
+        278252,
+        279059,
+        279139,
+        278323,
+        279371,
+        264442
+      ],
+      "controller_at_slew_bound": [
+        278265,
+        279122,
+        279139,
+        278392,
+        279371,
+        266372
+      ],
+      "desired_at_joint_bound": [
+        0,
+        49728,
+        112144,
+        76901,
+        0,
+        122411
+      ]
+    },
+    "fractions_per_joint": {
+      "raw_out_of_range": [
+        0.6436426484213528,
+        0.7265341030575155,
+        0.6844095217732165,
+        0.6433254935499965,
+        0.668890314304041,
+        0.8170158933789466
+      ],
+      "joint_limit_clipped": [
+        0.0,
+        0.17720761171691254,
+        0.3996293920604376,
+        0.27403962654123015,
+        0.0,
+        0.4362162354785831
+      ],
+      "slew_limited": [
+        0.9915615422991947,
+        0.9944373173686837,
+        0.9947224003991162,
+        0.9918145534887036,
+        0.9955491411873708,
+        0.9423490841707647
+      ],
+      "controller_at_slew_bound": [
+        0.9916078682916399,
+        0.9946618202551493,
+        0.9947224003991162,
+        0.9920604376024517,
+        0.9955491411873708,
+        0.9492267122799516
+      ],
+      "desired_at_joint_bound": [
+        0.0,
+        0.17720761171691254,
+        0.3996293920604376,
+        0.27403962654123015,
+        0.0,
+        0.4362162354785831
+      ]
+    },
+    "fractions_all_joints": {
+      "raw_out_of_range": 0.6973029957475114,
+      "joint_limit_clipped": 0.21451547763286058,
+      "slew_limited": 0.9850723398189722,
+      "controller_at_slew_bound": 0.9863047300026132,
+      "desired_at_joint_bound": 0.21451547763286058
+    }
+  },
+  "initial_window_max_policy_steps": 64,
+  "peak_abs_raw_action_per_joint": [
+    10.85325813293457,
+    26.502132415771484,
+    19.345537185668945,
+    16.30379867553711,
+    22.210166931152344,
+    33.7049560546875
+  ],
+  "scope": "Every public policy step, including evaluation settling; counters persist across episode resets. Teacher-controlled handover-prefix steps are excluded from counts and denominators.",
+  "definitions": {
+    "raw_out_of_range": "Raw policy action strictly outside [-1,1], before any clamp.",
+    "joint_limit_clipped": "home+clamped_action*scale differs from joint-limit-clipped desired target.",
+    "slew_limited": "Desired minus previous controller target exceeds allowed step by >1e-7 rad.",
+    "controller_at_slew_bound": "New controller target step reaches allowed slew step within 1e-7 rad; before optional command delay.",
+    "desired_at_joint_bound": "Desired target within 1e-7 rad of either policy joint limit, including exact endpoints."
+  }
+}

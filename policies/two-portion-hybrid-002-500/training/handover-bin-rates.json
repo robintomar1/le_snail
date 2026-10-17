@@ -1,0 +1,908 @@
+{
+ "run": "runs/two-portion-hybrid-002-500",
+ "window_iterations": 10,
+ "steps_per_iteration": 160,
+ "method": "per-iteration mean of per-step event counts x steps per iteration, summed per window; window_means: Reward/* (per-step mean over environments), Train/*, Policy/*, Loss/* averaged over the window",
+ "windows": [
+  {
+   "iterations": [
+    396,
+    405
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1430,
+    "left_completed": 702,
+    "left_stable_get_ups": 1158,
+    "right_started": 1536,
+    "right_completed": 674,
+    "right_stable_get_ups": 0,
+    "upright_falls": 198,
+    "upright_fall_recoveries": 38
+   },
+   "window_means": {
+    "Loss/entropy": 12.728204345703125,
+    "Loss/learner_fraction": 0.8528611838817597,
+    "Loss/learning_rate": 0.008786163036711514,
+    "Loss/surrogate": -5.584599784924649e-05,
+    "Loss/value_function": 0.8066077716648579,
+    "Policy/mean_noise_std": 2.1596264362335207,
+    "Reward/contact": -6.668636542599416e-05,
+    "Reward/effort": -0.0015215984312817454,
+    "Reward/forward": 0.009869953477755189,
+    "Reward/getup_potential": 0.7837189495563507,
+    "Reward/getup_progress": -0.003575027990154922,
+    "Reward/lane": -0.0004247791792636235,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.0032943077967502177,
+    "Train/mean_episode_length": 799.7957170274523,
+    "Train/mean_reward": 4.24901924861802
+   }
+  },
+  {
+   "iterations": [
+    406,
+    415
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1119,
+    "left_completed": 1144,
+    "left_stable_get_ups": 1061,
+    "right_started": 1129,
+    "right_completed": 899,
+    "right_stable_get_ups": 0,
+    "upright_falls": 363,
+    "upright_fall_recoveries": 71
+   },
+   "window_means": {
+    "Loss/entropy": 12.951963520050048,
+    "Loss/learner_fraction": 0.881203156709671,
+    "Loss/learning_rate": 0.009999999776482582,
+    "Loss/surrogate": 2.54418991971761e-05,
+    "Loss/value_function": 1.048214316368103,
+    "Policy/mean_noise_std": 2.2498202562332152,
+    "Reward/contact": -1.707043011265341e-05,
+    "Reward/effort": -0.0015461262897588312,
+    "Reward/forward": 0.00978521555662155,
+    "Reward/getup_potential": 0.7745127737522125,
+    "Reward/getup_progress": -0.004166437406092882,
+    "Reward/lane": -0.000623301847372204,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.0033658114960417153,
+    "Train/mean_episode_length": 1021.9809997558593,
+    "Train/mean_reward": 7.330437755584716
+   }
+  },
+  {
+   "iterations": [
+    416,
+    425
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1011,
+    "left_completed": 1009,
+    "left_stable_get_ups": 1016,
+    "right_started": 1062,
+    "right_completed": 1182,
+    "right_stable_get_ups": 47,
+    "upright_falls": 394,
+    "upright_fall_recoveries": 188
+   },
+   "window_means": {
+    "Loss/entropy": 13.12571153640747,
+    "Loss/learner_fraction": 0.8873219311237335,
+    "Loss/learning_rate": 0.009999999776482582,
+    "Loss/surrogate": 0.0005061948162619956,
+    "Loss/value_function": 0.7891376614570618,
+    "Policy/mean_noise_std": 2.326646661758423,
+    "Reward/contact": -1.419417039869586e-05,
+    "Reward/effort": -0.001553637650795281,
+    "Reward/forward": 0.009699933230876923,
+    "Reward/getup_potential": 0.7799741148948669,
+    "Reward/getup_progress": -0.0040577688254415985,
+    "Reward/lane": -0.0006718318210914731,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.0034163543488830326,
+    "Train/mean_episode_length": 1102.5799926757813,
+    "Train/mean_reward": 7.157859945297242
+   }
+  },
+  {
+   "iterations": [
+    426,
+    435
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1005,
+    "left_completed": 968,
+    "left_stable_get_ups": 987,
+    "right_started": 1099,
+    "right_completed": 1427,
+    "right_stable_get_ups": 696,
+    "upright_falls": 334,
+    "upright_fall_recoveries": 156
+   },
+   "window_means": {
+    "Loss/entropy": 13.318285942077637,
+    "Loss/learner_fraction": 0.8866109430789948,
+    "Loss/learning_rate": 0.009999999776482582,
+    "Loss/surrogate": 0.0004167220103681757,
+    "Loss/value_function": 0.8775976657867431,
+    "Policy/mean_noise_std": 2.410892462730408,
+    "Reward/contact": -1.1456806714704725e-05,
+    "Reward/effort": -0.0016938391607254743,
+    "Reward/forward": 0.010363599471747875,
+    "Reward/getup_potential": 0.8400285184383393,
+    "Reward/getup_progress": -0.004228766402229666,
+    "Reward/lane": -0.0007822957471944392,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.003712358023039997,
+    "Train/mean_episode_length": 1070.0390075683595,
+    "Train/mean_reward": 7.379653549194336
+   }
+  },
+  {
+   "iterations": [
+    436,
+    445
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1092,
+    "left_completed": 1010,
+    "left_stable_get_ups": 1038,
+    "right_started": 1081,
+    "right_completed": 1218,
+    "right_stable_get_ups": 1057,
+    "upright_falls": 392,
+    "upright_fall_recoveries": 232
+   },
+   "window_means": {
+    "Loss/entropy": 13.520295810699462,
+    "Loss/learner_fraction": 0.880737841129303,
+    "Loss/learning_rate": 0.009666666481643915,
+    "Loss/surrogate": 0.0006597760519071016,
+    "Loss/value_function": 0.8541405856609344,
+    "Policy/mean_noise_std": 2.496778655052185,
+    "Reward/contact": -9.16483772925858e-06,
+    "Reward/effort": -0.0018592344946227967,
+    "Reward/forward": 0.011487364768981934,
+    "Reward/getup_potential": 0.9200423300266266,
+    "Reward/getup_progress": -0.004633258283138275,
+    "Reward/lane": -0.0008693263924214989,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.004083724785596132,
+    "Train/mean_episode_length": 1055.709002685547,
+    "Train/mean_reward": 8.508239459991454
+   }
+  },
+  {
+   "iterations": [
+    446,
+    455
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1120,
+    "left_completed": 1097,
+    "left_stable_get_ups": 1115,
+    "right_started": 1089,
+    "right_completed": 1055,
+    "right_stable_get_ups": 1071,
+    "upright_falls": 303,
+    "upright_fall_recoveries": 186
+   },
+   "window_means": {
+    "Loss/entropy": 13.684403038024902,
+    "Loss/learner_fraction": 0.8811745524406434,
+    "Loss/learning_rate": 0.009999999776482582,
+    "Loss/surrogate": -3.756737860385329e-05,
+    "Loss/value_function": 0.8929714918136596,
+    "Policy/mean_noise_std": 2.5747445583343507,
+    "Reward/contact": -1.0519125225982862e-05,
+    "Reward/effort": -0.001875801687128842,
+    "Reward/forward": 0.01154896542429924,
+    "Reward/getup_potential": 0.9378575205802917,
+    "Reward/getup_progress": -0.004802020033821464,
+    "Reward/lane": -0.0008772931061685086,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.004178533377125859,
+    "Train/mean_episode_length": 1024.7640014648437,
+    "Train/mean_reward": 8.488875532150269
+   }
+  },
+  {
+   "iterations": [
+    456,
+    465
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1112,
+    "left_completed": 1182,
+    "left_stable_get_ups": 1109,
+    "right_started": 1118,
+    "right_completed": 1110,
+    "right_stable_get_ups": 1117,
+    "upright_falls": 237,
+    "upright_fall_recoveries": 176
+   },
+   "window_means": {
+    "Loss/entropy": 13.853425216674804,
+    "Loss/learner_fraction": 0.882338410615921,
+    "Loss/learning_rate": 0.009999999776482582,
+    "Loss/surrogate": 0.00021880685749238183,
+    "Loss/value_function": 0.9213682293891907,
+    "Policy/mean_noise_std": 2.652695417404175,
+    "Reward/contact": -1.6877020243555307e-05,
+    "Reward/effort": -0.0018856408074498176,
+    "Reward/forward": 0.011663654260337353,
+    "Reward/getup_potential": 0.9423014521598816,
+    "Reward/getup_progress": -0.004812102997675538,
+    "Reward/lane": -0.0007763631641864776,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.0042062355671077965,
+    "Train/mean_episode_length": 1058.2089904785157,
+    "Train/mean_reward": 8.759216260910033
+   }
+  },
+  {
+   "iterations": [
+    466,
+    475
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1126,
+    "left_completed": 1081,
+    "left_stable_get_ups": 1127,
+    "right_started": 1124,
+    "right_completed": 1106,
+    "right_stable_get_ups": 1126,
+    "upright_falls": 237,
+    "upright_fall_recoveries": 187
+   },
+   "window_means": {
+    "Loss/entropy": 14.01580877304077,
+    "Loss/learner_fraction": 0.8797519624233245,
+    "Loss/learning_rate": 0.009999999776482582,
+    "Loss/surrogate": 0.0002518853638321161,
+    "Loss/value_function": 1.0065851151943206,
+    "Policy/mean_noise_std": 2.7290910482406616,
+    "Reward/contact": -1.496220384069602e-05,
+    "Reward/effort": -0.001924392906948924,
+    "Reward/forward": 0.01185397496446967,
+    "Reward/getup_potential": 0.9489178657531738,
+    "Reward/getup_progress": -0.00483523509465158,
+    "Reward/lane": -0.0007733775826636701,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.004225177550688386,
+    "Train/mean_episode_length": 1028.2689880371095,
+    "Train/mean_reward": 8.990079021453857
+   }
+  },
+  {
+   "iterations": [
+    476,
+    485
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1167,
+    "left_completed": 1202,
+    "left_stable_get_ups": 1151,
+    "right_started": 1146,
+    "right_completed": 1124,
+    "right_stable_get_ups": 1159,
+    "upright_falls": 445,
+    "upright_fall_recoveries": 381
+   },
+   "window_means": {
+    "Loss/entropy": 14.15848684310913,
+    "Loss/learner_fraction": 0.8752574920654297,
+    "Loss/learning_rate": 0.009999999776482582,
+    "Loss/surrogate": -0.00019425597583904163,
+    "Loss/value_function": 1.052690726518631,
+    "Policy/mean_noise_std": 2.808932566642761,
+    "Reward/contact": -1.353127945549204e-05,
+    "Reward/effort": -0.0019069559522904456,
+    "Reward/forward": 0.011928735952824353,
+    "Reward/getup_potential": 0.945943433046341,
+    "Reward/getup_progress": -0.004865536792203784,
+    "Reward/lane": -0.0007186687435023487,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.0041938100941479204,
+    "Train/mean_episode_length": 1018.6740051269531,
+    "Train/mean_reward": 8.596902847290039
+   }
+  },
+  {
+   "iterations": [
+    486,
+    495
+   ],
+   "official_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "official_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "below_0.2_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "0.2_to_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_left": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "at_least_0.5_right": {
+    "started": 0,
+    "completed": 0,
+    "stable_get_ups": 0,
+    "attempt_truncations": 0,
+    "get_ups_per_completed": null
+   },
+   "recovery": {
+    "left_started": 1140,
+    "left_completed": 1097,
+    "left_stable_get_ups": 1171,
+    "right_started": 1169,
+    "right_completed": 1041,
+    "right_stable_get_ups": 1158,
+    "upright_falls": 706,
+    "upright_fall_recoveries": 573
+   },
+   "window_means": {
+    "Loss/entropy": 14.34814748764038,
+    "Loss/learner_fraction": 0.8746801078319549,
+    "Loss/learning_rate": 0.008576131518930196,
+    "Loss/surrogate": 0.0009102197167521808,
+    "Loss/value_function": 1.224137055873871,
+    "Policy/mean_noise_std": 2.9152096271514893,
+    "Reward/contact": -9.832345585891745e-06,
+    "Reward/effort": -0.0018555714515969158,
+    "Reward/forward": 0.012118816096335649,
+    "Reward/getup_potential": 0.9407942354679107,
+    "Reward/getup_progress": -0.004837702307850122,
+    "Reward/lane": -0.0006780025141779333,
+    "Reward/protected_contact": 0.0,
+    "Reward/standing": 0.004161832062527538,
+    "Train/mean_episode_length": 981.3669982910156,
+    "Train/mean_reward": 8.8544340133667
+   }
+  }
+ ]
+}

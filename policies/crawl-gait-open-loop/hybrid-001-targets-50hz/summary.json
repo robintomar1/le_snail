@@ -1,0 +1,121 @@
+{
+ "bundle": "runs/hybrid-001-frozen/exported",
+ "policy_sha256": "565ea23876ee375124401685cb3e0d88bb68069e369ffaf4cfc1f1fd4561e2d5",
+ "contract": "4f23c9185ab0b7255e21837c300078f951c026891190e5b9b0fbe713c3cab12c",
+ "policy_hz": 50.0,
+ "joint_names": [
+  "shoulder_pan",
+  "shoulder_lift",
+  "elbow_flex",
+  "wrist_flex",
+  "wrist_roll",
+  "gripper"
+ ],
+ "episodes": {
+  "crawl": {
+   "steps": 1500,
+   "mode_changes": [
+    [
+     0.0,
+     "gait"
+    ]
+   ],
+   "target_range_rad": [
+    [
+     -0.028,
+     -0.58,
+     0.054,
+     -1.55,
+     -0.079,
+     0.0
+    ],
+    [
+     0.191,
+     0.6,
+     1.08,
+     -0.52,
+     1.104,
+     0.33
+    ]
+   ]
+  },
+  "left": {
+   "steps": 1500,
+   "mode_changes": [
+    [
+     0.0,
+     "settle"
+    ],
+    [
+     0.98,
+     "getup"
+    ],
+    [
+     7.4,
+     "confirm"
+    ],
+    [
+     7.9,
+     "gait"
+    ]
+   ],
+   "target_range_rad": [
+    [
+     -0.635,
+     -1.605,
+     0.054,
+     -1.55,
+     -1.371,
+     0.0
+    ],
+    [
+     0.455,
+     0.6,
+     1.1,
+     -0.376,
+     1.104,
+     0.95
+    ]
+   ]
+  },
+  "right": {
+   "steps": 1500,
+   "mode_changes": [
+    [
+     0.0,
+     "settle"
+    ],
+    [
+     0.98,
+     "getup"
+    ],
+    [
+     6.72,
+     "confirm"
+    ],
+    [
+     7.22,
+     "gait"
+    ]
+   ],
+   "target_range_rad": [
+    [
+     -0.68,
+     -1.146,
+     0.054,
+     -1.55,
+     -0.079,
+     0.0
+    ],
+    [
+     0.462,
+     0.6,
+     1.1,
+     -0.034,
+     1.5,
+     0.95
+    ]
+   ]
+  }
+ }
+}

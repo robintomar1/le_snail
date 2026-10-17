@@ -1,0 +1,478 @@
+{
+  "groups": {
+    "crawl": {
+      "trials": 5,
+      "successes": 1,
+      "passed": false
+    },
+    "left": {
+      "trials": 5,
+      "successes": 0,
+      "passed": false
+    },
+    "right": {
+      "trials": 5,
+      "successes": 0,
+      "passed": false
+    }
+  },
+  "passed": false,
+  "seed": 4000,
+  "camera": "follow",
+  "probe_only": false,
+  "physics_stage": "robust",
+  "probe_seconds": null,
+  "bundle_manifest": {
+    "schema_version": 1,
+    "contract_fingerprint": "10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa",
+    "policy_sha256": "5065ae94d577e196279fea16ef88ddcd8ae0f06f51f0342e5171769fd0b491c4",
+    "physics_sha256": "0aea0616a7658b3682f452a723e1943abb94a42fd97b1bfe150dbebcc37383bc",
+    "observation_size": 24,
+    "action_size": 6,
+    "stage": "crawl",
+    "isaac_lab": "2.3.2",
+    "isaac_sim": "5.1.0",
+    "rsl_rl": "3.0.1",
+    "asset_source": {
+      "repository": "https://github.com/TheRobotStudio/SO-ARM100",
+      "commit": "a758567c3978dfeefe282ede0500085a48fe8f78"
+    },
+    "asset_validation": {
+      "source_sha256": "3a65d2d35e68a8d2f0c2cc176d19b884506543c93ba72980145b80abe276022c",
+      "prepared_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+      "restored_collision_links": [],
+      "mesh_sha256": {
+        "assets/base_motor_holder_so101_v1.stl": "8cd2f241037ea377af1191fffe0dd9d9006beea6dcc48543660ed41647072424",
+        "assets/base_so101_v2.stl": "bb12b7026575e1f70ccc7240051f9d943553bf34e5128537de6cd86fae33924d",
+        "assets/sts3215_03a_v1.stl": "a37c871fb502483ab96c256baf457d36f2e97afc9205313d9c5ab275ef941cd0",
+        "assets/waveshare_mounting_plate_so101_v2.stl": "e197e24005a07d01bbc06a8c42311664eaeda415bf859f68fa247884d0f1a6e9",
+        "assets/motor_holder_so101_base_v1.stl": "31242ae6fb59d8b15c66617b88ad8e9bded62d57c35d11c0c43a70d2f4caa95b",
+        "assets/rotation_pitch_so101_v1.stl": "9be900cc2a2bf718102841ef82ef8d2873842427648092c8ed2ca1e2ef4ffa34",
+        "assets/upper_arm_so101_v1.stl": "475056e03a17e71919b82fd88ab9a0b898ab50164f2a7943652a6b2941bb2d4f",
+        "assets/under_arm_so101_v1.stl": "d01d1f2de365651dcad9d6669e94ff87ff7652b5bb2d10752a66a456a86dbc71",
+        "assets/motor_holder_so101_wrist_v1.stl": "887f92e6013cb64ea3a1ab8675e92da1e0beacfd5e001f972523540545e08011",
+        "assets/sts3215_03a_no_horn_v1.stl": "75ef3781b752e4065891aea855e34dc161a38a549549cd0970cedd07eae6f887",
+        "assets/wrist_roll_pitch_so101_v2.stl": "6c7ec5525b4d8b9e397a30ab4bb0037156a5d5f38a4adf2c7d943d6c56eda5ae",
+        "assets/wrist_roll_follower_so101_v1.stl": "4b17b410a12d64ec39554abc3e8054d8a97384b2dc4a8d95a5ecb2a93670f5f4",
+        "assets/moving_jaw_so101_v1.stl": "785a9dded2f474bc1d869e0d3dae398a3dcd9c0c345640040472210d2861fa9d"
+      },
+      "joint_limits": {
+        "shoulder_pan": {
+          "lower": -1.91986,
+          "upper": 1.91986
+        },
+        "shoulder_lift": {
+          "lower": -1.74533,
+          "upper": 1.74533
+        },
+        "elbow_flex": {
+          "lower": -1.69,
+          "upper": 1.69
+        },
+        "wrist_flex": {
+          "lower": -1.65806,
+          "upper": 1.65806
+        },
+        "wrist_roll": {
+          "lower": -2.74385,
+          "upper": 2.84121
+        },
+        "gripper": {
+          "lower": -0.174533,
+          "upper": 1.74533
+        }
+      },
+      "contract_fingerprint": "10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa",
+      "contact_geometry_validated": false
+    },
+    "source_sha256": "801b7df420ad266c041fc4ec658bb721515c1bfa3cf31b27fb48fc2ca3ac0851",
+    "installed_versions": {
+      "torch": "2.7.0+cu128",
+      "rsl-rl-lib": "3.0.1",
+      "numpy": "1.26.0"
+    },
+    "physics_validated": false
+  },
+  "trials": [
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": true,
+      "reason": "passed",
+      "recovery_time_s": 0.5,
+      "recovery_x": 0.019296271726489067,
+      "upright_since": 0.0,
+      "max_lateral_m": 0.046581145375967026,
+      "last_time_s": 5.4
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": 0.5,
+      "recovery_x": -0.0011636242270469666,
+      "upright_since": 0.0,
+      "max_lateral_m": 0.14855284988880157,
+      "last_time_s": 17.8
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": 0.5,
+      "recovery_x": 0.014393029734492302,
+      "upright_since": 0.0,
+      "max_lateral_m": 0.1466507613658905,
+      "last_time_s": 10.9
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": 0.5,
+      "recovery_x": 0.004124865867197514,
+      "upright_since": 0.0,
+      "max_lateral_m": 0.14923498034477234,
+      "last_time_s": 14.4
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": 0.5,
+      "recovery_x": 0.0031501720659434795,
+      "upright_since": 0.0,
+      "max_lateral_m": 0.14725863933563232,
+      "last_time_s": 13.350000000000001
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.02888447232544422,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.018759896978735924,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.015716979280114174,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.053763728588819504,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.04441312327980995,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.06694016605615616,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.04124145582318306,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.06964507699012756,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.0885670930147171,
+      "last_time_s": 30.0
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "timeout",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.06094231829047203,
+      "last_time_s": 30.0
+    }
+  ],
+  "physics_validated": false,
+  "physics_override": {
+    "path": "configs/experiments/physics-v2-001.json",
+    "sha256": "49521bf5741c0ddda846265098af58a6fa28d02748879a14a0fe7becd57233c8",
+    "original_bundle_physics_sha256": "0aea0616a7658b3682f452a723e1943abb94a42fd97b1bfe150dbebcc37383bc",
+    "configuration": {
+      "parameters_measured": false,
+      "contact_geometry_validated": false,
+      "physics_dt": 0.005,
+      "stiffness_nm_rad": 12.0,
+      "damping_nm_s_rad": 0.5,
+      "effort_limit_nm": 1.5,
+      "velocity_limit_rad_s": 4.0,
+      "initial_height_m": 0.03,
+      "side_height_m": 0.18,
+      "static_friction_range": [
+        0.35,
+        0.75
+      ],
+      "dynamic_friction_ratio": 0.8,
+      "mass_scale_range": [
+        0.8,
+        1.2
+      ],
+      "gain_scale_range": [
+        0.8,
+        1.2
+      ],
+      "max_action_delay_steps": 1,
+      "position_noise_std_rad": 0.003,
+      "gyro_noise_std_rad_s": 0.02,
+      "gravity_noise_std": 0.01,
+      "drag_force_range_n": [
+        0.05,
+        0.3
+      ],
+      "drag_velocity_scale_m_s": 0.02,
+      "tether_attachment_base_m": [
+        -0.03,
+        0.0,
+        0.05
+      ],
+      "recovery_start_fraction": 0.35,
+      "max_fallen_time_s": 30.0,
+      "protected_points": [],
+      "protected_points_validated": false,
+      "settled_starts": {
+        "upright": {
+          "root_pose": [
+            0.0,
+            0.0,
+            0.039472855627536774,
+            0.9558178782463074,
+            -0.0004111308080609888,
+            0.29395607113838196,
+            0.0013960389187559485
+          ],
+          "joint_rad": [
+            0.0014106598682701588,
+            -0.6194220781326294,
+            1.0809744596481323,
+            -0.5362148880958557,
+            0.003298228606581688,
+            0.34972134232521057
+          ]
+        },
+        "left": {
+          "root_pose": [
+            0.0,
+            0.0,
+            0.05773790925741196,
+            0.6705037951469421,
+            0.7415876984596252,
+            0.01997608132660389,
+            -0.008564465679228306
+          ],
+          "joint_rad": [
+            0.002013709396123886,
+            -0.6000331044197083,
+            1.1032377481460571,
+            -0.49915096163749695,
+            0.007237274665385485,
+            0.3500300645828247
+          ]
+        },
+        "right": {
+          "root_pose": [
+            0.0,
+            0.0,
+            0.05886935442686081,
+            0.6677265167236328,
+            -0.7443643808364868,
+            0.007851768285036087,
+            0.001202095067128539
+          ],
+          "joint_rad": [
+            -0.003763316897675395,
+            -0.6007824540138245,
+            1.1054562330245972,
+            -0.499457985162735,
+            0.0002845333074219525,
+            0.35001492500305176
+          ]
+        }
+      },
+      "settled_start_asset_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+      "settled_start_contract_fingerprint": "10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa",
+      "settled_start_provenance": {
+        "report": "runs/physics-v2-prepare-001/report.json",
+        "report_sha256": "7b06d38da5fca7c8254f995e14e5ebd58ffb8cf5731ea2cace02f1b4a915274b",
+        "meaning": "Nominal physics-v2 rest after20s home hold, zero-velocity reset; xy recentered. Provisional mass/actuators, not physically measured."
+      },
+      "positive_progress_upright_range": [
+        0.5,
+        0.8
+      ],
+      "yaw_cost_weight": 1.0,
+      "side_upright_progress_reward_cap": 1.0,
+      "effort_limit_range_nm": [
+        0.98,
+        2.94
+      ],
+      "velocity_limit_range_rad_s": [
+        3.0,
+        4.7
+      ],
+      "physics_revision": "physics-v2-provisional-001",
+      "base_payload": {
+        "measured": false,
+        "mass_kg": 0.05,
+        "center_m": [
+          -0.03,
+          0.0,
+          0.055
+        ],
+        "box_size_m": [
+          0.07,
+          0.05,
+          0.025
+        ],
+        "estimate_breakdown_kg": {
+          "controller_board": 0.016,
+          "imu_development_board": 0.01,
+          "additional_imu_mount": 0.015,
+          "local_wires_fasteners": 0.009
+        },
+        "basis": "50g provisional sum: controller product listing16g (not weighed bare board); IMU carrier10g, additional mount15g and local wires/fasteners9g are engineering estimates. Existing CAD Waveshare mounting plate already in base is not counted again. Box geometry/COM are estimated, not a collision or protected-clearance model. External tether mass is not added to links; drag model retained.",
+        "sources": [
+          "https://www.waveshare.com/product/modules/motors-servos/bus-servo-adapter-a.htm",
+          "https://www.xsens.com/hubfs/Downloads/Manuals/mti-1-series_DK3_user_manual.pdf"
+        ]
+      },
+      "actuator_provenance": {
+        "source": "https://www.feetechrc.com/525603.html",
+        "variant": "12V ST-3215-C018, user sticker identifies12VSTS3215; detailed suffix not independently measured",
+        "rated_nm": 0.980665,
+        "stall_nm": 2.941995,
+        "no_load_rad_s": 4.717106,
+        "servo_mass_kg": 0.055,
+        "nominal_rationale": "1.5Nm is the lower approved provisional choice between rated and stall;4rad/s below catalog no-load. Independent box limits do not model torque-speed or thermal/current envelope. Not continuous ratings or hardware authorization."
+      }
+    },
+    "diagnostic_only": true,
+    "evaluation_script_sha256": "6ffa273f8987a22c0e381ec6d8127a7c4c2bd17a245460ffc4eaba887139ea34",
+    "environment_sha256": "c2037fb627572f66e9cb2ccfd1f42ccc9c145f9fc8868d2dd06bd1f686e01797",
+    "physics_validation_sha256": "b868a7879d30760516146f5d8004b801ed307cf37ff76f7da329e586859766a6"
+  },
+  "milestone_candidate": false,
+  "milestone_passed": false,
+  "visual_gait_review_required": true
+}

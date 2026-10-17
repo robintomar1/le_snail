@@ -1,0 +1,209 @@
+{
+ "args": {
+  "output": "runs/gait-clone-fast-001",
+  "teacher_config": "configs/controllers/fast-gait-001.json",
+  "contract": "configs/policy-50hz-001.json",
+  "physics": "configs/experiments/physics-v2-50hz-001.json",
+  "reference_bundle": "runs/two-portion-50hz-001-100/exported",
+  "asset": "assets/so101/snail.urdf",
+  "stage": "robust",
+  "num_envs": "1024",
+  "steps": "750",
+  "betas": "[1.0, 0.5, 0.25, 0.0, 0.0, 0.0]",
+  "updates": "4000",
+  "batch": "8192",
+  "seed": "7",
+  "enable_cameras": "False",
+  "xr": "False",
+  "device": "cuda:0",
+  "cpu": "False",
+  "verbose": "False",
+  "info": "False",
+  "rendering_mode": "None",
+  "kit_args": "",
+  "anim_recording_enabled": "False",
+  "anim_recording_start_time": "0",
+  "anim_recording_stop_time": "10",
+  "headless": "True",
+  "hide_ui": "True",
+  "create_new_stage": "False",
+  "physics_gpu": "0",
+  "active_gpu": "0"
+ },
+ "rounds": [
+  {
+   "round": 0,
+   "beta": 1.0,
+   "samples_kept": 768000,
+   "dataset": 768000,
+   "teacher_driven": {
+    "env_seconds": 15360.0,
+    "forward_cm_s": 5.912038111467457,
+    "terminations_per_env_minute": 0.0
+   },
+   "student_driven": {
+    "env_seconds": 0.0,
+    "forward_cm_s": 0.0,
+    "terminations_per_env_minute": 0.0
+   },
+   "student_driven_upright_fraction": 0.0,
+   "fit_loss": [
+    0.4220753610134125,
+    0.00039338693022727966,
+    0.00025639665545895696,
+    0.00019341096049174666,
+    0.00016459531616419554,
+    0.00016239342221524566,
+    0.00013263428991194814,
+    0.00015085499035194516,
+    0.00015132297994568944
+   ],
+   "seconds": 19.5
+  },
+  {
+   "round": 1,
+   "beta": 0.5,
+   "samples_kept": 768000,
+   "dataset": 1536000,
+   "teacher_driven": {
+    "env_seconds": 7547.52,
+    "forward_cm_s": 6.371043680350964,
+    "terminations_per_env_minute": 0.15899262274230475
+   },
+   "student_driven": {
+    "env_seconds": 7812.4800000000005,
+    "forward_cm_s": 6.385647068712308,
+    "terminations_per_env_minute": 0.15360039321700664
+   },
+   "student_driven_upright_fraction": 1.0,
+   "fit_loss": [
+    0.00010540848597884178,
+    0.00011100441770395264,
+    9.906008199322969e-05,
+    8.98871076060459e-05,
+    8.034471102291718e-05,
+    7.935569738037884e-05,
+    7.910137355793267e-05,
+    7.574328628834337e-05,
+    8.160114521160722e-05
+   ],
+   "seconds": 17.2
+  },
+  {
+   "round": 2,
+   "beta": 0.25,
+   "samples_kept": 768000,
+   "dataset": 2304000,
+   "teacher_driven": {
+    "env_seconds": 4095.92,
+    "forward_cm_s": 6.188069446015542,
+    "terminations_per_env_minute": 1.699251938514424
+   },
+   "student_driven": {
+    "env_seconds": 11264.08,
+    "forward_cm_s": 6.100697542542667,
+    "terminations_per_env_minute": 1.4648333463540741
+   },
+   "student_driven_upright_fraction": 1.0,
+   "fit_loss": [
+    8.822145173326135e-05,
+    9.611474524717778e-05,
+    9.334048809250817e-05,
+    7.84928270149976e-05,
+    8.847098797559738e-05,
+    7.095957698766142e-05,
+    6.0666221543215215e-05,
+    7.593088957946748e-05,
+    6.750704778824002e-05
+   ],
+   "seconds": 20.1
+  },
+  {
+   "round": 3,
+   "beta": 0.0,
+   "samples_kept": 768000,
+   "dataset": 3072000,
+   "teacher_driven": {
+    "env_seconds": 0.0,
+    "forward_cm_s": 0.0,
+    "terminations_per_env_minute": 0.0
+   },
+   "student_driven": {
+    "env_seconds": 15360.0,
+    "forward_cm_s": 6.129666012711823,
+    "terminations_per_env_minute": 1.046875
+   },
+   "student_driven_upright_fraction": 1.0,
+   "fit_loss": [
+    7.515211473219097e-05,
+    7.433207065332681e-05,
+    7.60479670134373e-05,
+    6.910802039783448e-05,
+    6.832322105765343e-05,
+    7.077819464029744e-05,
+    6.587769894395024e-05,
+    6.377312092809007e-05,
+    6.195960304467008e-05
+   ],
+   "seconds": 19.5
+  },
+  {
+   "round": 4,
+   "beta": 0.0,
+   "samples_kept": 767997,
+   "dataset": 3839997,
+   "teacher_driven": {
+    "env_seconds": 0.0,
+    "forward_cm_s": 0.0,
+    "terminations_per_env_minute": 0.0
+   },
+   "student_driven": {
+    "env_seconds": 15360.0,
+    "forward_cm_s": 6.162164972629398,
+    "terminations_per_env_minute": 1.12109375
+   },
+   "student_driven_upright_fraction": 0.99999609375,
+   "fit_loss": [
+    5.945342854829505e-05,
+    7.546748383902013e-05,
+    6.336338992696255e-05,
+    5.9655620134435594e-05,
+    5.841955862706527e-05,
+    5.831724774907343e-05,
+    5.718269312637858e-05,
+    5.2691579185193405e-05,
+    5.7383731473237276e-05
+   ],
+   "seconds": 19.9
+  },
+  {
+   "round": 5,
+   "beta": 0.0,
+   "samples_kept": 768000,
+   "dataset": 4607997,
+   "teacher_driven": {
+    "env_seconds": 0.0,
+    "forward_cm_s": 0.0,
+    "terminations_per_env_minute": 0.0
+   },
+   "student_driven": {
+    "env_seconds": 15360.0,
+    "forward_cm_s": 6.074036491724352,
+    "terminations_per_env_minute": 1.13671875
+   },
+   "student_driven_upright_fraction": 1.0,
+   "fit_loss": [
+    5.523686922970228e-05,
+    7.002110942266881e-05,
+    7.472076686099172e-05,
+    7.224319415399805e-05,
+    5.302135105011985e-05,
+    5.4257980082184076e-05,
+    5.219360173214227e-05,
+    5.073150896350853e-05,
+    5.4126499890116975e-05
+   ],
+   "seconds": 20.0
+  }
+ ]
+}

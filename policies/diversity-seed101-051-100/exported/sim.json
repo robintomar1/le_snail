@@ -1,0 +1,113 @@
+{
+  "parameters_measured": false,
+  "contact_geometry_validated": false,
+  "physics_dt": 0.005,
+  "stiffness_nm_rad": 12.0,
+  "damping_nm_s_rad": 0.5,
+  "effort_limit_nm": 0.8,
+  "velocity_limit_rad_s": 2.0,
+  "initial_height_m": 0.03,
+  "side_height_m": 0.18,
+  "static_friction_range": [
+    0.35,
+    0.75
+  ],
+  "dynamic_friction_ratio": 0.8,
+  "mass_scale_range": [
+    0.9,
+    1.1
+  ],
+  "gain_scale_range": [
+    0.8,
+    1.2
+  ],
+  "max_action_delay_steps": 1,
+  "position_noise_std_rad": 0.003,
+  "gyro_noise_std_rad_s": 0.02,
+  "gravity_noise_std": 0.01,
+  "drag_force_range_n": [
+    0.05,
+    0.3
+  ],
+  "drag_velocity_scale_m_s": 0.02,
+  "tether_attachment_base_m": [
+    -0.03,
+    0.0,
+    0.05
+  ],
+  "recovery_start_fraction": 0.35,
+  "max_fallen_time_s": 30.0,
+  "protected_points": [],
+  "protected_points_validated": false,
+  "settled_starts": {
+    "upright": {
+      "root_pose": [
+        0.0,
+        0.0,
+        0.0395178496837616,
+        0.9556940793991089,
+        -0.0004209921753499657,
+        0.2943584620952606,
+        0.0013962909579277039
+      ],
+      "joint_rad": [
+        0.0014300582697615027,
+        -0.6212183833122253,
+        1.0818119049072266,
+        -0.536289632320404,
+        0.003096819156780839,
+        0.3497202396392822
+      ]
+    },
+    "left": {
+      "root_pose": [
+        0.0,
+        0.0,
+        0.05778820067644119,
+        0.6705676317214966,
+        0.7414936423301697,
+        0.020819423720240593,
+        -0.009634124115109444
+      ],
+      "joint_rad": [
+        -0.0007142885006032884,
+        -0.6006498336791992,
+        1.1043399572372437,
+        -0.49902603030204773,
+        0.0077096507884562016,
+        0.35003018379211426
+      ]
+    },
+    "right": {
+      "root_pose": [
+        0.0,
+        0.0,
+        0.05894187092781067,
+        0.6677823066711426,
+        -0.7443017959594727,
+        0.008726075291633606,
+        0.0023449447471648455
+      ],
+      "joint_rad": [
+        -0.0008890613680705428,
+        -0.6014246344566345,
+        1.106497049331665,
+        -0.4993238151073456,
+        0.0002838357468135655,
+        0.350014865398407
+      ]
+    }
+  },
+  "settled_start_asset_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+  "settled_start_contract_fingerprint": "10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa",
+  "settled_start_provenance": {
+    "report": "runs/inspection-20261014T075415Z/visual-regression/report.json",
+    "report_sha256": "bdb627ead64d59dab4aa7e263d233ec25391649244ac4141d9f352e88403fe90",
+    "meaning": "simulated nominal rest at5s; recentered xy; unmeasured physical pose"
+  },
+  "positive_progress_upright_range": [
+    0.5,
+    0.8
+  ],
+  "yaw_cost_weight": 1.0
+}

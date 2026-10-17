@@ -1,0 +1,109 @@
+{
+  "stable_definition": "upright cosine >=0.8 continuously for0.5s, after handover for prefix episodes",
+  "fraction_of_side_starts": 0.5,
+  "teacher_scripts": [
+    "hybrid"
+  ],
+  "prefix_steps": {
+    "max_upright": 600,
+    "max_side": 300,
+    "distribution": "uniform 1..max"
+  },
+  "bins": {
+    "official_start": {
+      "left": {
+        "started": 11322,
+        "completed": 10492,
+        "reached_stable_upright": 10933,
+        "completed_after_stable_upright": 10197,
+        "completed_at_fallen_limit": 262,
+        "completed_after_upright_and_at_fallen_limit": 88
+      },
+      "right": {
+        "started": 11554,
+        "completed": 10836,
+        "reached_stable_upright": 7431,
+        "completed_after_stable_upright": 6826,
+        "completed_at_fallen_limit": 4005,
+        "completed_after_upright_and_at_fallen_limit": 13
+      }
+    },
+    "handover_upright_below_0.2": {
+      "left": {
+        "started": 6184,
+        "completed": 5768,
+        "reached_stable_upright": 5872,
+        "completed_after_stable_upright": 5501,
+        "completed_at_fallen_limit": 146,
+        "completed_after_upright_and_at_fallen_limit": 60
+      },
+      "right": {
+        "started": 5351,
+        "completed": 5056,
+        "reached_stable_upright": 4396,
+        "completed_after_stable_upright": 4156,
+        "completed_at_fallen_limit": 904,
+        "completed_after_upright_and_at_fallen_limit": 13
+      }
+    },
+    "handover_upright_0.2_to_0.5": {
+      "left": {
+        "started": 646,
+        "completed": 610,
+        "reached_stable_upright": 635,
+        "completed_after_stable_upright": 600,
+        "completed_at_fallen_limit": 40,
+        "completed_after_upright_and_at_fallen_limit": 32
+      },
+      "right": {
+        "started": 686,
+        "completed": 672,
+        "reached_stable_upright": 681,
+        "completed_after_stable_upright": 667,
+        "completed_at_fallen_limit": 9,
+        "completed_after_upright_and_at_fallen_limit": 4
+      }
+    },
+    "handover_upright_at_least_0.5": {
+      "left": {
+        "started": 4356,
+        "completed": 4144,
+        "reached_stable_upright": 4346,
+        "completed_after_stable_upright": 4143,
+        "completed_at_fallen_limit": 39,
+        "completed_after_upright_and_at_fallen_limit": 39
+      },
+      "right": {
+        "started": 5362,
+        "completed": 5298,
+        "reached_stable_upright": 5358,
+        "completed_after_stable_upright": 5298,
+        "completed_at_fallen_limit": 3,
+        "completed_after_upright_and_at_fallen_limit": 3
+      }
+    }
+  },
+  "prefix_terminations": {
+    "left": 0,
+    "right": 0
+  },
+  "attempt_seconds": null,
+  "attempt_truncations": {
+    "official_start": {
+      "left": 0,
+      "right": 0
+    },
+    "handover_upright_below_0.2": {
+      "left": 0,
+      "right": 0
+    },
+    "handover_upright_0.2_to_0.5": {
+      "left": 0,
+      "right": 0
+    },
+    "handover_upright_at_least_0.5": {
+      "left": 0,
+      "right": 0
+    }
+  }
+}

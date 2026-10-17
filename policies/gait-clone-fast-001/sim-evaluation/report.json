@@ -1,0 +1,569 @@
+{
+  "groups": {
+    "crawl": {
+      "trials": 5,
+      "successes": 5,
+      "passed": true
+    },
+    "left": {
+      "trials": 5,
+      "successes": 0,
+      "passed": false
+    },
+    "right": {
+      "trials": 5,
+      "successes": 0,
+      "passed": false
+    }
+  },
+  "passed": false,
+  "speed_diagnostics": {
+    "physics_dt_s": 0.005,
+    "physics_steps": 76140,
+    "environment_time_samples": 76140,
+    "joint_time_samples": 456840,
+    "environment_over_limit_samples": 0,
+    "joint_over_limit_samples": 0,
+    "over_limit_environment_time_fraction": 0.0,
+    "over_limit_joint_time_fraction": 0.0,
+    "peak_abs_velocity_rad_s": 1.9406991004943848,
+    "peak_limit_ratio": 0.5491407513618469,
+    "driven_proxy_over_limit_joint_samples": 0,
+    "longest_driven_proxy_over_limit_s": 0.0,
+    "longest_driven_proxy_location": null,
+    "flag_over_one_percent_time": false,
+    "flag_sustained_driven_proxy": false,
+    "tolerance_rad_s": 0.001,
+    "scope": "Every completed physics step before autoreset, including settling; limits are actual per-environment randomized solver caps. Teacher-controlled handover-prefix steps are excluded from counts and denominators.",
+    "interpretation": "Joint velocity constraint may be exceeded by solver/contact interactions. PD sign is an unclipped estimate, not measured drive force. Flags require review, not proof of policy exploitation. Sustained proxy threshold is one policy period (0.05s)."
+  },
+  "action_diagnostics": {
+    "joint_names": [
+      "shoulder_pan",
+      "shoulder_lift",
+      "elbow_flex",
+      "wrist_flex",
+      "wrist_roll",
+      "gripper"
+    ],
+    "all": {
+      "policy_steps": 19035,
+      "samples_per_joint": 19035,
+      "counts_per_joint": {
+        "raw_out_of_range": [
+          0,
+          15685,
+          307,
+          15457,
+          0,
+          0
+        ],
+        "joint_limit_clipped": [
+          0,
+          0,
+          7241,
+          15976,
+          0,
+          8842
+        ],
+        "slew_limited": [
+          153,
+          2888,
+          3584,
+          2694,
+          2470,
+          255
+        ],
+        "controller_at_slew_bound": [
+          153,
+          2898,
+          3584,
+          2698,
+          2470,
+          255
+        ],
+        "desired_at_joint_bound": [
+          0,
+          0,
+          7241,
+          15976,
+          0,
+          8842
+        ]
+      },
+      "fractions_per_joint": {
+        "raw_out_of_range": [
+          0.0,
+          0.8240084055686893,
+          0.016128184922511165,
+          0.8120304701864985,
+          0.0,
+          0.0
+        ],
+        "joint_limit_clipped": [
+          0.0,
+          0.0,
+          0.3804045179931705,
+          0.8392960336222748,
+          0.0,
+          0.46451273969004464
+        ],
+        "slew_limited": [
+          0.008037825059101654,
+          0.1517205148410822,
+          0.18828473863934858,
+          0.14152876280535856,
+          0.12976096664039927,
+          0.013396375098502758
+        ],
+        "controller_at_slew_bound": [
+          0.008037825059101654,
+          0.15224586288416075,
+          0.18828473863934858,
+          0.14173890202258996,
+          0.12976096664039927,
+          0.013396375098502758
+        ],
+        "desired_at_joint_bound": [
+          0.0,
+          0.0,
+          0.3804045179931705,
+          0.8392960336222748,
+          0.0,
+          0.46451273969004464
+        ]
+      },
+      "fractions_all_joints": {
+        "raw_out_of_range": 0.2753611767796165,
+        "joint_limit_clipped": 0.28070221521758165,
+        "slew_limited": 0.10545486384729884,
+        "controller_at_slew_bound": 0.10557744505735049,
+        "desired_at_joint_bound": 0.28070221521758165
+      }
+    },
+    "initial": {
+      "policy_steps": 64,
+      "samples_per_joint": 64,
+      "counts_per_joint": {
+        "raw_out_of_range": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "joint_limit_clipped": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "slew_limited": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "controller_at_slew_bound": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ],
+        "desired_at_joint_bound": [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "fractions_per_joint": {
+        "raw_out_of_range": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "joint_limit_clipped": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "slew_limited": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "controller_at_slew_bound": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "desired_at_joint_bound": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      "fractions_all_joints": {
+        "raw_out_of_range": 0.0,
+        "joint_limit_clipped": 0.0,
+        "slew_limited": 0.0,
+        "controller_at_slew_bound": 0.0,
+        "desired_at_joint_bound": 0.0
+      }
+    },
+    "initial_window_max_policy_steps": 64,
+    "peak_abs_raw_action_per_joint": [
+      0.42219117283821106,
+      3.222996234893799,
+      1.0135157108306885,
+      2.499258518218994,
+      0.7716089487075806,
+      0.9021265506744385
+    ],
+    "scope": "Every public policy step, including evaluation settling; counters persist across episode resets. Teacher-controlled handover-prefix steps are excluded from counts and denominators.",
+    "definitions": {
+      "raw_out_of_range": "Raw policy action strictly outside [-1,1], before any clamp.",
+      "joint_limit_clipped": "home+clamped_action*scale differs from joint-limit-clipped desired target.",
+      "slew_limited": "Desired minus previous controller target exceeds allowed step by >1e-7 rad.",
+      "controller_at_slew_bound": "New controller target step reaches allowed slew step within 1e-7 rad; before optional command delay.",
+      "desired_at_joint_bound": "Desired target within 1e-7 rad of either policy joint limit, including exact endpoints."
+    }
+  },
+  "runtime_source_hashes": {
+    "/workspace/le_snail/scripts/evaluate.py": "22c6980956f945b4a65dcbd2e21c2573dba3ee5b0020a7bb4d9af48c8bd60156",
+    "src/le_snail/sim/env.py": "3e4f8aca94351a6787d4275e969af44a7ecbf1ab5b31c779d09e3cf76624393c",
+    "src/le_snail/physics.py": "f83b0ba7d88709f1821a3c3048846b8210ba64bb8346bc3ee9793afeb63af4d8",
+    "src/le_snail/speed.py": "adc485a94e5c7d18de3cdab4185b0a48b1cf87bd96ac9be5a0841f1a4a2da5f9",
+    "src/le_snail/action_stats.py": "c175368ffb52d995f5b71396258e18bc03d2ad9251982b2cf85ad81f5d02ccce"
+  },
+  "seed": 5660,
+  "camera": "follow",
+  "probe_only": false,
+  "physics_stage": "robust",
+  "probe_seconds": null,
+  "bundle_manifest": {
+    "schema_version": 1,
+    "contract_fingerprint": "4f23c9185ab0b7255e21837c300078f951c026891190e5b9b0fbe713c3cab12c",
+    "policy_sha256": "235ffe1d50ec5d02dad87d0d4e5be9eba814f770e4598202934a57a58e29fb0b",
+    "physics_sha256": "3eeaea6ec929a3028d5a6c102bfa81e0c1df8358dca755db5b2ebbd4e8af56e3",
+    "observation_size": 24,
+    "action_size": 6,
+    "stage": "cloned",
+    "isaac_lab": "2.3.2",
+    "isaac_sim": "5.1.0",
+    "rsl_rl": "3.0.1",
+    "asset_source": {
+      "repository": "https://github.com/TheRobotStudio/SO-ARM100",
+      "commit": "a758567c3978dfeefe282ede0500085a48fe8f78"
+    },
+    "asset_validation": {
+      "source_sha256": "3a65d2d35e68a8d2f0c2cc176d19b884506543c93ba72980145b80abe276022c",
+      "prepared_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+      "restored_collision_links": [],
+      "mesh_sha256": {
+        "assets/base_motor_holder_so101_v1.stl": "8cd2f241037ea377af1191fffe0dd9d9006beea6dcc48543660ed41647072424",
+        "assets/base_so101_v2.stl": "bb12b7026575e1f70ccc7240051f9d943553bf34e5128537de6cd86fae33924d",
+        "assets/sts3215_03a_v1.stl": "a37c871fb502483ab96c256baf457d36f2e97afc9205313d9c5ab275ef941cd0",
+        "assets/waveshare_mounting_plate_so101_v2.stl": "e197e24005a07d01bbc06a8c42311664eaeda415bf859f68fa247884d0f1a6e9",
+        "assets/motor_holder_so101_base_v1.stl": "31242ae6fb59d8b15c66617b88ad8e9bded62d57c35d11c0c43a70d2f4caa95b",
+        "assets/rotation_pitch_so101_v1.stl": "9be900cc2a2bf718102841ef82ef8d2873842427648092c8ed2ca1e2ef4ffa34",
+        "assets/upper_arm_so101_v1.stl": "475056e03a17e71919b82fd88ab9a0b898ab50164f2a7943652a6b2941bb2d4f",
+        "assets/under_arm_so101_v1.stl": "d01d1f2de365651dcad9d6669e94ff87ff7652b5bb2d10752a66a456a86dbc71",
+        "assets/motor_holder_so101_wrist_v1.stl": "887f92e6013cb64ea3a1ab8675e92da1e0beacfd5e001f972523540545e08011",
+        "assets/sts3215_03a_no_horn_v1.stl": "75ef3781b752e4065891aea855e34dc161a38a549549cd0970cedd07eae6f887",
+        "assets/wrist_roll_pitch_so101_v2.stl": "6c7ec5525b4d8b9e397a30ab4bb0037156a5d5f38a4adf2c7d943d6c56eda5ae",
+        "assets/wrist_roll_follower_so101_v1.stl": "4b17b410a12d64ec39554abc3e8054d8a97384b2dc4a8d95a5ecb2a93670f5f4",
+        "assets/moving_jaw_so101_v1.stl": "785a9dded2f474bc1d869e0d3dae398a3dcd9c0c345640040472210d2861fa9d"
+      },
+      "joint_limits": {
+        "shoulder_pan": {
+          "lower": -1.91986,
+          "upper": 1.91986
+        },
+        "shoulder_lift": {
+          "lower": -1.74533,
+          "upper": 1.74533
+        },
+        "elbow_flex": {
+          "lower": -1.69,
+          "upper": 1.69
+        },
+        "wrist_flex": {
+          "lower": -1.65806,
+          "upper": 1.65806
+        },
+        "wrist_roll": {
+          "lower": -2.74385,
+          "upper": 2.84121
+        },
+        "gripper": {
+          "lower": -0.174533,
+          "upper": 1.74533
+        }
+      },
+      "contract_fingerprint": "10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa",
+      "contact_geometry_validated": false
+    },
+    "installed_versions": {
+      "torch": "2.7.0+cu128",
+      "rsl-rl-lib": "3.0.1",
+      "numpy": "1.26.0"
+    },
+    "physics_validated": false,
+    "controller": {
+      "type": "dagger_clone",
+      "teacher": "src/le_snail/gait_teacher.py PhaseGait",
+      "teacher_config": "configs/controllers/fast-gait-001.json",
+      "teacher_config_sha256": "cdc8d0f952026b2db9dea7845d5dfad99a02699004a33ea7b629585d9725d418",
+      "teacher_module_sha256": "a9dcc75a2bb2f149da3853a1982a55ff8628ec8796feba1a0e90d2aa77176dd4",
+      "script_sha256": "a734c97ebe09985067f7435e69593725961ed2c59464cc6c8669de259e57237f",
+      "stateful": false,
+      "training_performed": true
+    },
+    "physics_source": "configs/experiments/physics-v2-50hz-001.json",
+    "asset_validation_from": "runs/two-portion-50hz-001-100/exported",
+    "reference_training_source_sha256": "f25d69262e4d62c5bd1ec2e9ad1748a278b348d06f1c48454fbd0cb9fe96674e"
+  },
+  "trials": [
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": true,
+      "reason": "passed",
+      "recovery_time_s": 1.58,
+      "recovery_x": 0.02072412334382534,
+      "upright_since": 10.72,
+      "max_lateral_m": 0.01566443219780922,
+      "last_time_s": 11.22
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": true,
+      "reason": "passed",
+      "recovery_time_s": 1.6400000000000001,
+      "recovery_x": 0.015028601512312889,
+      "upright_since": 8.66,
+      "max_lateral_m": 0.01981223002076149,
+      "last_time_s": 9.16
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": true,
+      "reason": "passed",
+      "recovery_time_s": 1.58,
+      "recovery_x": 0.01577720418572426,
+      "upright_since": 9.3,
+      "max_lateral_m": 0.017690420150756836,
+      "last_time_s": 9.8
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": true,
+      "reason": "passed",
+      "recovery_time_s": 1.62,
+      "recovery_x": 0.020866049453616142,
+      "upright_since": 10.14,
+      "max_lateral_m": 0.017170388251543045,
+      "last_time_s": 10.64
+    },
+    {
+      "kind": "crawl",
+      "timeout_s": 120.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": true,
+      "reason": "passed",
+      "recovery_time_s": 1.6,
+      "recovery_x": 0.0221848227083683,
+      "upright_since": 9.38,
+      "max_lateral_m": 0.016479728743433952,
+      "last_time_s": 9.88
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.007689913734793663,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.00797993317246437,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.007071703672409058,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.008087987080216408,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "left",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.008530166000127792,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.01742638275027275,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.016611183062195778,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.01837613433599472,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.017945488914847374,
+      "last_time_s": 29.98
+    },
+    {
+      "kind": "right",
+      "timeout_s": 30.0,
+      "lane_half_width_m": 0.15,
+      "started": true,
+      "finished": true,
+      "success": false,
+      "reason": "invalid_state_or_fault",
+      "recovery_time_s": null,
+      "recovery_x": null,
+      "upright_since": null,
+      "max_lateral_m": 0.018770620226860046,
+      "last_time_s": 29.98
+    }
+  ],
+  "physics_validated": false,
+  "physics_override": null,
+  "milestone_candidate": false,
+  "milestone_passed": false,
+  "visual_gait_review_required": true
+}

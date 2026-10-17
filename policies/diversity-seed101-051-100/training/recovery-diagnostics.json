@@ -1,0 +1,26 @@
+{
+  "stable_definition": "upright cosine >=0.8 continuously for0.5s",
+  "scope": "side-start episodes in this environment lifetime; incomplete episodes excluded from fractions",
+  "sides": {
+    "left": {
+      "started": 0,
+      "completed": 0,
+      "reached_stable_upright": 0,
+      "completed_after_stable_upright": 0,
+      "completed_at_fallen_limit": 0,
+      "completed_after_upright_and_at_fallen_limit": 0,
+      "completed_upright_fraction": null,
+      "completed_fallen_limit_fraction": null
+    },
+    "right": {
+      "started": 0,
+      "completed": 0,
+      "reached_stable_upright": 0,
+      "completed_after_stable_upright": 0,
+      "completed_at_fallen_limit": 0,
+      "completed_after_upright_and_at_fallen_limit": 0,
+      "completed_upright_fraction": null,
+      "completed_fallen_limit_fraction": null
+    }
+  }
+}
