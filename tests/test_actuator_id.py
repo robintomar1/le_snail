@@ -172,3 +172,12 @@ def test_monitor_tolerates_brief_load_saturation_but_aborts_when_it_lasts():
     first = next(k for k, reason in enumerate(held) if reason)
     assert 'load' in held[first] and 'id 2' in held[first]
     assert 0.002 * first == pytest.approx(LIMITS.load_persist_s, abs=0.003)
+
+
+def test_urdf_targets_map_to_ticks_through_sign_and_offset():
+    from le_snail.actuator_id import TICKS_PER_RAD, urdf_to_ticks
+    targets = np.array([[0.0, 0.0], [1.0, -0.5]])
+    ticks = urdf_to_ticks(targets, signs=[1, -1], offsets=[2053, 2063.5])
+    assert ticks.dtype.kind == 'i'
+    assert ticks[0].tolist() == [2053, 2064]
+    assert ticks[1].tolist() == [round(2053 + TICKS_PER_RAD), round(2063.5 + 0.5 * TICKS_PER_RAD)]

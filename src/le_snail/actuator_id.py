@@ -125,6 +125,11 @@ def joint_window(registers, margin_ticks):
     return lower, upper
 
 
+def urdf_to_ticks(targets_rad, signs, offsets):
+    """URDF joint angles (samples, joints) to goal ticks: ticks = offset + sign * rad * TICKS_PER_RAD."""
+    return np.rint(np.asarray(offsets) + np.asarray(signs) * np.asarray(targets_rad) * TICKS_PER_RAD).astype(int)
+
+
 # Motions are integer goal-tick arrays of shape (samples, joints) at a fixed command rate.
 
 def ramp(start, goal, duration_s, rate_hz):

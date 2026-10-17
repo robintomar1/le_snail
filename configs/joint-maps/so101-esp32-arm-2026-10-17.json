@@ -1,0 +1,20 @@
+{
+  "schema": "le-snail-joint-map-1",
+  "status": "measured for the current SO-101 (ESP32 CH343 pass-through bus); not valid for any other arm unit",
+  "urdf": "assets/so101/snail.urdf",
+  "formula": "ticks = offset_ticks + sign * q_rad * 4096 / (2 pi)",
+  "valid_while_eeprom_homing_offset": {"1": 596, "2": 756, "3": -129, "4": 1340, "5": -920},
+  "joints": {
+    "shoulder_pan":  {"id": 1, "sign": 1, "offset_ticks": 2163.0, "uncertainty_deg": 8,
+                      "evidence": "sign: IMU gyro vs pan rate (2026-10-16); offset: midpoint of EEPROM limits 806-3520"},
+    "shoulder_lift": {"id": 2, "sign": 1, "offset_ticks": 2125.0, "uncertainty_deg": 3,
+                      "evidence": "sign: gravity sag and forearm IMU; offset: limit midpoint, limp rest lands at the URDF lower limit"},
+    "elbow_flex":    {"id": 3, "sign": 1, "offset_ticks": 1899.5, "uncertainty_deg": 3,
+                      "evidence": "sign: gravity sag and forearm IMU; offset: limit midpoint, limp rest lands at the URDF upper limit"},
+    "wrist_flex":    {"id": 4, "sign": 1, "offset_ticks": 2053.0, "uncertainty_deg": 1.5,
+                      "evidence": "2026-10-17 poses: ruler-straight 2063, up 90 at 1161, down 90 at 3090, hand-swept stops 871 and 3217 (midpoint 2044)"},
+    "wrist_roll":    {"id": 5, "sign": 1, "offset_ticks": 2063.0, "uncertainty_deg": 5,
+                      "evidence": "2026-10-17: posed like the stock gripper at roll 0 (moving jaw upper-left seen from behind) 2063; quarter turn CCW seen from behind 3099"}
+  },
+  "eeprom_changes": ["2026-10-17 servo 4 Min_Position_Limit 1493 -> 920 (robin OK; stops 871/3217)"]
+}
