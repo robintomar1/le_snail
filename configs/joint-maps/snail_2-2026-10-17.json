@@ -5,20 +5,61 @@
   "formula": "ticks = offset_ticks + sign * q_rad * 4096 / (2 pi)",
   "lerobot_calibration": "configs/calibration/snail_2/so101_follower_new.json",
   "lerobot_calibration_sha256": "b9176ad9191bad9c8b041cde0bf6428d51cb922affc51ba7e50fe0ac15ff4333",
-  "valid_while_eeprom_homing_offset": {"1": 1957, "2": -1503, "3": -1167, "4": -27, "5": 177, "6": -104},
+  "valid_while_eeprom_homing_offset": {
+    "1": 1957,
+    "2": -1503,
+    "3": -1167,
+    "4": -27,
+    "5": 177,
+    "6": -104
+  },
   "frame_note": "Hand readings were taken 2026-10-17 09:15-09:26Z under the earlier homing offsets 1901/-1437/-1261/51/144/-93 and shifted by (old - new) homing: -56/+66/-94/+78/-33/+11 ticks. Check: shifted wrist up stop 893 vs calibration range_min 891, elbow fold stop 3100 vs range_max 3096.",
   "joints": {
-    "shoulder_pan":  {"id": 1, "sign": 1, "offset_ticks": 2079.0, "uncertainty_deg": 4,
-                      "evidence": "sign: turning left (CCW from above) lowers ticks (straight 2135 -> left90 1186, old frame); zero: posed straight out from the base front (2135 old); LeRobot mid 2039.5; hand stops 836/3437 (new frame)"},
-    "shoulder_lift": {"id": 2, "sign": 1, "offset_ticks": 2009.0, "uncertainty_deg": 4,
-                      "evidence": "sign: forward/down raises ticks; zero: midpoint of hand-swept stops 753/3133 (old) = 1943 -> 2009; LeRobot mid 2016; forearm-level pose agrees within 1 deg"},
-    "elbow_flex":    {"id": 3, "sign": 1, "offset_ticks": 1990.5, "uncertainty_deg": 4,
-                      "evidence": "sign: folding raises ticks; zero: midpoint of stops 975/3194 (old) -> 1990.5; LeRobot mid 1984"},
-    "wrist_flex":    {"id": 4, "sign": 1, "offset_ticks": 2058.0, "uncertainty_deg": 4,
-                      "evidence": "sign: down raises ticks; zero: midpoint of up stop 893 and calibration range_max 3222 (2057.5) and of the up/down 90 deg poses (2058); the ruler-straight pose read 2123 (new frame), 5.7 deg off, unresolved"},
-    "wrist_roll":    {"id": 5, "sign": 1, "offset_ticks": 2047.5, "uncertainty_deg": 15,
-                      "evidence": "NOT MEASURED on snail_2 (poses E/F pending): LeRobot full-turn midpoint, sign assumed as snail_1"},
-    "gripper":       {"id": 6, "sign": 1, "offset_ticks": 2046.0, "uncertainty_deg": 10,
-                      "evidence": "sign: opening raises ticks; zero: fully closed (2035 old -> 2046); open stop 3481; URDF gripper 0 rad taken as closed (provisional)"}
+    "shoulder_pan": {
+      "id": 1,
+      "sign": 1,
+      "offset_ticks": 2079.0,
+      "uncertainty_deg": 4,
+      "evidence": "sign: turning left (CCW from above) lowers ticks (straight 2135 -> left90 1186, old frame); zero: posed straight out from the base front (2135 old); LeRobot mid 2039.5; hand stops 836/3437 (new frame)"
+    },
+    "shoulder_lift": {
+      "id": 2,
+      "sign": 1,
+      "offset_ticks": 2009.0,
+      "uncertainty_deg": 4,
+      "evidence": "sign: forward/down raises ticks; zero: midpoint of hand-swept stops 753/3133 (old) = 1943 -> 2009; LeRobot mid 2016; forearm-level pose agrees within 1 deg"
+    },
+    "elbow_flex": {
+      "id": 3,
+      "sign": 1,
+      "offset_ticks": 1990.5,
+      "uncertainty_deg": 4,
+      "evidence": "sign: folding raises ticks; zero: midpoint of stops 975/3194 (old) -> 1990.5; LeRobot mid 1984"
+    },
+    "wrist_flex": {
+      "id": 4,
+      "sign": 1,
+      "offset_ticks": 2058.0,
+      "uncertainty_deg": 4,
+      "evidence": "sign: down raises ticks; zero: midpoint of up stop 893 and calibration range_max 3222 (2057.5) and of the up/down 90 deg poses (2058); the ruler-straight pose read 2123 (new frame), 5.7 deg off, unresolved"
+    },
+    "wrist_roll": {
+      "id": 5,
+      "sign": 1,
+      "offset_ticks": 2047.5,
+      "uncertainty_deg": 5,
+      "window_ticks": [
+        1273,
+        3995
+      ],
+      "evidence": "sign: counter-clockwise seen from behind raises ticks (sweep 2026-10-17 11:49Z); zero: LeRobot middle pose of the fresh calibration (snail_1's posed zero sat 1.4 deg from its LeRobot middle); hard stops at 1213 (-73 deg) and 4949 unwrapped (+255 deg, reads 853 after the 4095->0 wrap); window_ticks keeps goals 60 ticks off the clockwise stop and below the wrap"
+    },
+    "gripper": {
+      "id": 6,
+      "sign": 1,
+      "offset_ticks": 2046.0,
+      "uncertainty_deg": 10,
+      "evidence": "sign: opening raises ticks; zero: fully closed (2035 old -> 2046); open stop 3481; URDF gripper 0 rad taken as closed (provisional)"
+    }
   }
 }

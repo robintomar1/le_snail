@@ -164,6 +164,11 @@ def main():
                              'the arm was recalibrated or swapped, so the map does not apply')
         planned, lower, upper = motion_window(servos_before, jmap.ids, args.margin_ticks)
         lower, upper = np.array(lower), np.array(upper)
+        # Hard stops the servo EEPROM does not know about (e.g. a full-turn roll with a cable stop).
+        for k, name in enumerate(n for n in contract.joint_names if n in joint_map['joints']):
+            if 'window_ticks' in joint_map['joints'][name]:
+                lo, hi = joint_map['joints'][name]['window_ticks']
+                lower[k], upper[k] = max(lower[k], lo), min(upper[k], hi)
         home_ticks = jmap.to_ticks(home)
         if np.any(home_ticks < lower) or np.any(home_ticks > upper):
             raise SystemExit(f'Home pose {home_ticks.tolist()} lies outside the servo windows {lower.tolist()}..{upper.tolist()}')

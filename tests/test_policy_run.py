@@ -220,3 +220,14 @@ def test_ramp_to_home_is_speed_limited_whatever_ramp_s_says(run, tmp_path):
     goals = meta['log']['command_goal_ticks']
     steps = np.abs(np.diff(np.vstack([[2048, 2048, 2048], goals]), axis=0)).max(axis=1)
     assert steps.max() <= 0.5 * TICKS_PER_RAD / 50 + 1           # 0.5 rad/s at 50 Hz, plus tick rounding
+
+
+def test_joint_map_soft_window_tightens_the_eeprom_window(run, tmp_path):
+    sim = SimServos()   # EEPROM window 1124..2972 after the margin
+    map_path = Path(json.loads((tmp_path / 'hw.json').read_text())['joint_map'])
+    joints = json.loads(json.dumps(JOINTS))
+    joints['shoulder_pan']['window_ticks'] = [1000, 2700]      # a hard stop the servo EEPROM does not know about
+    map_path.write_text(json.dumps({'joints': joints}))
+    meta = run(sim, make_bundle(tmp_path / 'b', [1.0] + [0.0] * 5), extra=['--allow-unvalidated-physics', '--seconds', '1.5'])
+    assert meta['window_ticks'][0][0] == 1124 and meta['window_ticks'][1][0] == 2700
+    assert meta['log']['command_goal_ticks'][:, 0].max() == 2700
