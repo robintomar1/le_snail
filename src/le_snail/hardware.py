@@ -348,24 +348,38 @@ BNO_REPORT_GAME_ROTATION_VECTOR = 0x08
 
 
 def _adafruit_bno085(bus):
+    """Adafruit BNO08X_I2C that stamps each decoded report (adafruit-circuitpython-bno08x 1.3.1 internals)."""
     from adafruit_bno08x.i2c import BNO08X_I2C
     from adafruit_extended_bus import ExtendedI2C
-    return BNO08X_I2C(ExtendedI2C(bus))
+
+    class StampedBno08x(BNO08X_I2C):
+        report_times = None
+
+        def _process_report(self, report_id, report_bytes):
+            super()._process_report(report_id, report_bytes)
+            if self.report_times is None:
+                self.report_times = {}
+            self.report_times[report_id] = time.monotonic()
+
+    device = StampedBno08x(ExtendedI2C(bus))
+    device.report_times = {}
+    return device
 
 
 class Bno085Imu:
-    """BNO085 on I2C (Adafruit driver): game rotation vector + gyro, polled on a thread.
+    """BNO085 on I2C (Adafruit driver): game rotation vector + gyro, drained on a thread.
 
     Same read() contract as ImuSerial (base-frame gravity unit vector and angular rate, sample freshness).
-    The game rotation vector is gravity-referenced with free yaw, which is all the policy uses. The driver
-    caches the last report, so a sample counts as new only when the values change; sensor noise makes
-    consecutive reports differ, and frozen values age out as stale. Reports are requested at 100 Hz
-    (the Adafruit default is 20 Hz, too slow for a 50 Hz policy). On a Raspberry Pi use the bit-banged
-    i2c-gpio bus: the BNO085's clock stretching upsets the hardware I2C controller.
+    The game rotation vector is gravity-referenced with free yaw, which is all the policy uses. Freshness
+    comes from report arrival (the device stamps every decoded report), not from value changes: a robot at
+    rest repeats identical gyro and quaternion values. sample_at is the older of the two latest reports.
+    Reports are requested at 50 Hz (the Adafruit default is 20 Hz); on the Pi's bit-banged i2c-gpio bus
+    (needed because the BNO085's clock stretching upsets the Pi 5 hardware I2C) that keeps the bus ~50 %
+    busy, measured 2026-10-17; 100 Hz works but loads it ~90 %.
     """
-    REPORT_INTERVAL_US = 10000
+    REPORT_INTERVAL_US = 20000
 
-    def __init__(self, bus, mounting, device_factory=_adafruit_bno085, poll_s=0.004, attempts=4):
+    def __init__(self, bus, mounting, device_factory=_adafruit_bno085, poll_s=0.002, attempts=4):
         self.mounting = mounting
         for attempt in range(attempts):
             try:
@@ -390,8 +404,7 @@ class Bno085Imu:
         failures = 0
         while not self.stop.is_set():
             try:
-                i, j, k, real = self.device.game_quaternion
-                gyro = self.device.gyro
+                self.device._process_available_packets()
                 failures = 0
             except Exception as exc:  # occasional I2C hiccups; a persistent failure ends the stream
                 failures += 1
@@ -401,15 +414,17 @@ class Bno085Imu:
                     return
                 time.sleep(self.poll_s)
                 continue
-            values = (real, i, j, k, *gyro)
-            if values != last:
-                last = values
-                now = time.monotonic()
+            times = self.device.report_times
+            stamps = (times.get(BNO_REPORT_GAME_ROTATION_VECTOR), times.get(BNO_REPORT_GYROSCOPE))
+            if None not in stamps and stamps != last:
+                last = stamps
+                i, j, k, real = self.device._readings[BNO_REPORT_GAME_ROTATION_VECTOR]
+                gyro = self.device._readings[BNO_REPORT_GYROSCOPE]
                 gravity, rate = imu_base_vectors((real, i, j, k), gyro, self.mounting)
                 self.seq += 1
                 with self.lock:
-                    self.latest = {'gravity': gravity, 'gyro': rate, 'sample_at': now, 'received_at': now, 'seq': self.seq,
-                                   'quaternion_wxyz': (real, i, j, k)}
+                    self.latest = {'gravity': gravity, 'gyro': rate, 'sample_at': min(stamps), 'received_at': max(stamps),
+                                   'seq': self.seq, 'quaternion_wxyz': (real, i, j, k)}
             time.sleep(self.poll_s)
 
     def read(self, max_age_s):
@@ -419,7 +434,7 @@ class Bno085Imu:
             result = self.latest
         if result is None:
             raise RuntimeError('No IMU sample received')
-        if time.monotonic() - result['received_at'] > max_age_s:
+        if time.monotonic() - result['sample_at'] > max_age_s:
             raise RuntimeError('Stale IMU sample')
         return result
 
