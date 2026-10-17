@@ -33,13 +33,47 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from actuator_log import ACCELERATION, GOAL_POSITION, TORQUE_ENABLE, Recorder, motion_window, stdin_has_line  # noqa: E402
-from le_snail.actuator_id import JointTickMap, SafetyLimits, ramp  # noqa: E402
+from le_snail.actuator_id import TICKS_PER_RAD, JointTickMap, SafetyLimits, ramp  # noqa: E402
 from le_snail.bundle import load_bundle  # noqa: E402
 from le_snail.contract import VelocityEstimator  # noqa: E402
 from le_snail.hardware import ImuSerial  # noqa: E402
 from le_snail.servo_bus import STATE_BLOCK, ServoBus, dump_servos, open_bus_port  # noqa: E402
 
 MAX_SECONDS = 30.0
+MAX_RAMP_SPEED_RAD_S = 0.5   # the start ramp is stretched to stay under this, whatever --ramp-s says
+
+
+def proper_rotation(matrix):
+    """Nearest proper rotation to a measured mounting matrix; refuse anything that is not close to one."""
+    r = np.asarray(matrix, dtype=float)
+    if r.shape != (3, 3) or not np.isfinite(r).all() or np.linalg.det(r) < 0.9 or not np.allclose(r @ r.T, np.eye(3), atol=1e-2):
+        raise SystemExit(f'imu_rotation_base_from_sensor is not a proper rotation: {r.tolist()}')
+    u, _, vt = np.linalg.svd(r)
+    return u @ vt
+
+
+def release_torque(recorder, ids, attempts=5):
+    """Broadcast Torque_Enable = 0 until every servo reads it back as 0 (broadcasts get no reply and can be lost)."""
+    for _ in range(attempts):
+        try:
+            recorder.write('Torque_Enable', {sid: 0 for sid in ids}, TORQUE_ENABLE)
+            replies = [recorder.bus.read(sid, *TORQUE_ENABLE) for sid in ids]
+            if all(r is not None and r[1][0] == 0 for r in replies):
+                return 'confirmed'
+        except Exception:  # keep trying; the caller still closes the ports
+            pass
+    return 'NOT CONFIRMED: cut the 12 V supply'
+
+
+def first_imu_sample(imu, max_age_s, wait_s=2.0):
+    deadline = time.monotonic() + wait_s
+    while True:
+        try:
+            return imu.read(max_age_s)
+        except RuntimeError as error:
+            if time.monotonic() > deadline:
+                raise SystemExit(f'IMU not streaming fresh samples: {error}')
+            time.sleep(0.02)
 
 
 def open_imu(port, rotation, baudrate):
@@ -80,7 +114,8 @@ def main():
     parser.add_argument('--ramp-s', type=float, default=5.0, help='live: ramp from the present pose to home')
     parser.add_argument('--margin-ticks', type=int, default=100)
     parser.add_argument('--acceleration', type=int, default=254)
-    parser.add_argument('--max-feedback-age-s', type=float, default=0.1)
+    parser.add_argument('--settle-s', type=float, default=1.0, help='live: hold home before the first policy step')
+    parser.add_argument('--max-feedback-age-s', type=float, default=0.04, help='servo/IMU sample age limit (2 policy steps)')
     parser.add_argument('--timeout-ms', type=float, default=10.0)
     parser.add_argument('--allow-unvalidated-physics', action='store_true',
                         help='live: run a policy whose physics is not validated against the real robot (operator decision)')
@@ -92,6 +127,7 @@ def main():
     hardware = json.loads(args.hardware.read_text())
     if hardware.get('imu_rotation_base_from_sensor') is None:
         raise SystemExit(f'{args.hardware}: imu_rotation_base_from_sensor is not measured for this arm; measure the IMU mounting first')
+    rotation = proper_rotation(hardware['imu_rotation_base_from_sensor'])
     joint_map_path = Path(hardware['joint_map'])
     joint_map = json.loads(joint_map_path.read_text())
     contract, manifest = load_bundle(args.bundle)
@@ -108,13 +144,13 @@ def main():
     with torch.inference_mode():
         policy(torch.zeros((1, 24)))
 
-    imu = open_imu(hardware['imu_port'], hardware['imu_rotation_base_from_sensor'], hardware.get('imu_baudrate') or 115200)
+    imu = open_imu(hardware['imu_port'], rotation, hardware.get('imu_baudrate') or 115200)
     port = open_bus_port(hardware['servo_port'])
     bus = ServoBus(port, timeout_s=args.timeout_ms / 1000, allow_writes=live)
     recorder = Recorder(bus, jmap.ids, limits)
     steps = Steps()
     servos_before = servos_after = None
-    torque_on, finished, abort, interrupted = False, False, None, False
+    torque_on, finished, abort, interrupted, torque_release = False, False, None, False, None
     try:
         servos_before = dump_servos(bus, jmap.ids)
         expected = joint_map.get('valid_while_eeprom_homing_offset', {})
@@ -128,6 +164,8 @@ def main():
         home_ticks = jmap.to_ticks(home)
         if np.any(home_ticks < lower) or np.any(home_ticks > upper):
             raise SystemExit(f'Home pose {home_ticks.tolist()} lies outside the servo windows {lower.tolist()}..{upper.tolist()}')
+        sample = first_imu_sample(imu, args.max_feedback_age_s)
+        print(f'IMU gravity in the base frame {np.round(sample["gravity"], 3).tolist()} (upright and level: [0, 0, -1])')
         print(f'policy {args.bundle} ({manifest["policy_sha256"][:12]}), {contract.policy_hz:g} Hz, mode {args.mode}; '
               f'servo ids {jmap.ids}, virtual joints {jmap.virtual}; home ticks {home_ticks.tolist()}')
         if live:
@@ -146,7 +184,10 @@ def main():
 
         gc.disable()  # see actuator_log.py: cyclic GC pauses grow with the logs; the loop makes no cycles
         if live:
-            goals = ramp(present, home_ticks, args.ramp_s, contract.policy_hz)
+            distance_rad = np.abs(home_ticks - present).max() / TICKS_PER_RAD
+            ramp_s = max(args.ramp_s, distance_rad / MAX_RAMP_SPEED_RAD_S, dt)
+            goals = ramp(present, home_ticks, ramp_s, contract.policy_hz)
+            goals = np.vstack([goals, np.repeat(home_ticks[None], round(args.settle_s * contract.policy_hz), axis=0)])
             t0 = time.monotonic()
             for k, goal in enumerate(goals):
                 recorder.command(goal)
@@ -157,21 +198,22 @@ def main():
         target = home.copy() if live else None
         estimator = VelocityEstimator(contract.velocity_filter_alpha)
         start = time.monotonic()
-        k = 0
+        k, last_state_ns = 0, None
+        cycle_budget = args.timeout_ms / 1000 + 0.004   # worst-case bus cycle: skip cycles that could overrun the slot
         while abort is None and (now := time.monotonic()) - start < args.seconds:
-            if now < start + k * dt:
-                abort = recorder.cycle()
+            slot = start + k * dt
+            if now < slot:
+                if slot - now > cycle_budget:
+                    abort = recorder.cycle()
                 continue
-            if k and now - (start + k * dt) > 0.5 * dt:
-                abort = f'control deadline missed by {(now - start - k * dt) * 1e3:.1f} ms at step {k}'
-                break
             abort = recorder.cycle()
             if abort:
                 break
-            if recorder.last_complete is None:
-                abort = 'no complete servo state yet'
+            if recorder.last_complete is None or recorder.last_complete[0] == last_state_ns:
+                abort = f'no fresh complete servo state for step {k}'
                 break
             state_ns, states = recorder.last_complete
+            last_state_ns = state_ns
             state_age = time.monotonic() - state_ns / 1e9
             if state_age > args.max_feedback_age_s:
                 abort = f'servo state {state_age * 1e3:.0f} ms old'
@@ -197,8 +239,13 @@ def main():
                 break
             raw_goal = jmap.to_ticks(candidate)
             goal = np.clip(raw_goal, lower, upper)
-            applied = jmap.to_rad(goal, virtual_rad=candidate)
+            # Tick rounding can land a hair outside a contract limit; the next position_target would reject it.
+            applied = np.clip(jmap.to_rad(goal, virtual_rad=candidate), contract.lower_rad, contract.upper_rad)
             if live:
+                late = time.monotonic() - slot
+                if late > 0.5 * dt:
+                    abort = f'control deadline missed: step {k} command {late * 1e3:.1f} ms after its slot'
+                    break
                 recorder.command(goal)
                 target = applied
             steps.add(step_time_s=now - start, joint_rad=q, velocity=velocity, gravity=sample['gravity'], gyro=sample['gyro'],
@@ -215,18 +262,22 @@ def main():
         finished = abort is None
     except KeyboardInterrupt:
         interrupted = True
+    except Exception as error:  # anything unexpected still releases torque and saves the log
+        abort = abort or f'error: {error!r}'
     finally:
         gc.enable()
-        if torque_on:
-            try:
-                recorder.write('Torque_Enable', {sid: 0 for sid in jmap.ids}, TORQUE_ENABLE)
-            finally:
-                print('torque released')
         try:
-            servos_after = dump_servos(bus, jmap.ids)
+            if torque_on:
+                torque_release = release_torque(recorder, jmap.ids)
+                print(f'torque release {torque_release}')
         finally:
-            port.close()
-            imu.close()
+            try:
+                servos_after = dump_servos(bus, jmap.ids)
+            except Exception:
+                servos_after = None
+            finally:
+                port.close()
+                imu.close()
 
     utc = datetime.now(timezone.utc)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -239,8 +290,8 @@ def main():
             'hardware': hardware, 'joint_map_sha256': sha256(joint_map_path), 'servo_ids': jmap.ids,
             'virtual_joints': jmap.virtual, 'seconds': args.seconds, 'ramp_s': args.ramp_s, 'margin_ticks': args.margin_ticks,
             'window_ticks': [lower.tolist(), upper.tolist()] if servos_before else None,
-            'max_feedback_age_s': args.max_feedback_age_s, 'state_block': list(STATE_BLOCK), 'safety_limits': limits.__dict__,
-            'policy_steps': len(steps.rows['step_time_s']), 'abort': abort, 'interrupted': interrupted, 'finished': finished,
+            'max_feedback_age_s': args.max_feedback_age_s, 'settle_s': args.settle_s, 'imu_rotation_used': rotation.tolist(), 'state_block': list(STATE_BLOCK), 'safety_limits': limits.__dict__,
+            'policy_steps': len(steps.rows['step_time_s']), 'torque_release': torque_release, 'abort': abort, 'interrupted': interrupted, 'finished': finished,
             'summary': summary,
             'writes': [{'register': n, 'sent_ns': s, 'flushed_ns': f, 'values': v} for n, s, f, v in recorder.events],
             'register_dump_before': servos_before, 'register_dump_after': servos_after}

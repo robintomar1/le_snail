@@ -161,3 +161,62 @@ def test_refuses_when_servo_homing_offsets_differ_from_the_joint_map(run, tmp_pa
     map_path.write_text(json.dumps({'joints': JOINTS, 'valid_while_eeprom_homing_offset': {'1': 0, '2': 0, '3': 57}}))
     with pytest.raises(SystemExit, match='Homing_Offset'):
         run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), mode='shadow')
+
+
+def test_target_at_a_contract_limit_survives_tick_rounding(run, tmp_path):
+    # lift lower limit -1.65 rad -> 2400 - 1075.6 ticks rounds outward to 1324 (-1.6505 rad) unless clamped
+    sim = SimServos()
+    meta = run(sim, make_bundle(tmp_path / 'b', [0.0, -1.0, 0.0, 0.0, 0.0, 0.0]), extra=['--allow-unvalidated-physics', '--seconds', '2'])
+    assert meta['abort'] is None
+    assert meta['log']['target_rad'][:, 1].min() >= -1.65
+
+
+class LossyTorqueOff(SimServos):
+    """Ignores the first Torque_Enable = 0 broadcast, like a lost packet."""
+    dropped = False
+
+    def write(self, request):
+        if request[4] == 0x83 and request[5] == 40 and request[8] == 0 and not self.dropped:
+            self.dropped = True
+            return
+        super().write(request)
+
+
+def test_torque_release_is_read_back_and_retried(run, tmp_path):
+    sim = LossyTorqueOff()
+    meta = run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics'])
+    assert sim.dropped and all(m[40] == 0 for m in sim.memory.values())
+    assert meta['torque_release'] == 'confirmed'
+
+
+def test_improper_imu_rotation_is_refused_before_any_write(run, tmp_path):
+    hw = tmp_path / 'hw.json'
+    config = json.loads(hw.read_text())
+    config['imu_rotation_base_from_sensor'] = [[1, 0, 0], [0, 1, 0], [0, 0, -1]]
+    hw.write_text(json.dumps(config))
+    sim = SimServos()
+    with pytest.raises(SystemExit, match='rotation'):
+        run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics'])
+    assert sim.writes == []
+
+
+def test_lost_servo_feedback_aborts_and_still_saves_the_log(run, tmp_path):
+    sim = SimServos()
+    calls = {'n': 0}
+
+    def drop_after_ramp(s):
+        calls['n'] += 1
+        if calls['n'] > 200 and s.memory[1][40]:
+            s.pending = b''
+    sim.after_read = drop_after_ramp
+    meta = run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics', '--seconds', '3'])
+    assert meta['abort'] and not meta['finished']
+    assert all(m[40] == 0 for m in sim.memory.values())
+
+
+def test_ramp_to_home_is_speed_limited_whatever_ramp_s_says(run, tmp_path):
+    sim = SimServos()
+    meta = run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics', '--ramp-s', '0'])
+    goals = meta['log']['command_goal_ticks']
+    steps = np.abs(np.diff(np.vstack([[2048, 2048, 2048], goals]), axis=0)).max(axis=1)
+    assert steps.max() <= 0.5 * TICKS_PER_RAD / 50 + 1           # 0.5 rad/s at 50 Hz, plus tick rounding
