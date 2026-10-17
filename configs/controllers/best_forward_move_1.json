@@ -1,0 +1,192 @@
+{
+ "name": "best_forward_move_1",
+ "what": "The open-loop crawl gait of the hybrid scripted controller hybrid-001 (#14): rock-and-drag \"D-balanced\". This is the gait that moved the real arm forward on 2026-10-17 (the #12 agent played the first 10 s of targets/crawl.npz open loop from the Rubik Pi after a 5 s ramp; robin: \"the arm moved fine, it looked nice, it was just a bit slow\"). Copies, not moves: hybrid-001 and runs/hybrid-001-frozen are unchanged.",
+ "gait": {
+  "name": "D-balanced",
+  "formula": "a_j(t) = clip(c_j + r(t) A_j w(m_j 2 pi t / T + psi_j), -1, 1); w(x) = tanh(k sin x)/tanh(k); r(t) = min(1, t/ramp_s); target = home + a * action_scale, clamped to joint limits, then slewed at max_target_speed (1 rad/s)",
+  "joint_order": [
+   "shoulder_pan",
+   "shoulder_lift",
+   "elbow_flex",
+   "wrist_flex",
+   "wrist_roll",
+   "gripper"
+  ],
+  "params": {
+   "T": 2.372643566568369,
+   "k": 0.3936312335843915,
+   "c": [
+    0.08153293592577357,
+    1.0,
+    -0.5857329214087706,
+    -0.7220623642367388,
+    0.34353518970218605,
+    -0.3765101492213153
+   ],
+   "A": [
+    0.1093245975106259,
+    0.7428098583110727,
+    0.4250398936680716,
+    0.41620595856474935,
+    0.43543431816817857,
+    0.3
+   ],
+   "psi": [
+    0.0,
+    1.0311895953543688,
+    2.128618980017121,
+    0.04670129189154154,
+    3.4984210908327844,
+    0.4394393235882748
+   ],
+   "m": [
+    1,
+    2,
+    2,
+    2,
+    1,
+    2
+   ],
+   "ramp_s": 2.0
+  },
+  "gait_period_s": 2.372643566568369,
+  "stroke_period_s": 1.1863217832841846,
+  "stroke_hz": 0.8429416150748106,
+  "note": "m = 2 for lift/elbow/wrist_flex/gripper: two drag strokes per gait period T; pan and wrist_roll (m = 1) alternate sides once per T.",
+  "origin": {
+   "file": "runs/gait-study-rock/best.json",
+   "sha256": "083c1a8707afa7ba061a145add2b7f2f774934a52edf0fbfb8e872b39e7a7797",
+   "search": "search2 round 8 score 45.1",
+   "why": "Only candidate that passes the acceptance-style check (>=50 cm in lane with 0.5 s stable upright >=0.8) in 16/16 nominal and 16/16 randomized runs while keeping non-support floor contact to ~11% (wrist link) and |roll| < 0.5 deg; 3.2 cm/s nominal, 2.7 cm/s randomized."
+  }
+ },
+ "contract": {
+  "file": "configs/policy-50hz-001.json",
+  "sha256": "ae11c223535a0903340cc034f8dd644fedeaba94e093a9ec1d4463aa550a64dd",
+  "fingerprint": "4f23c9185ab0b7255e21837c300078f951c026891190e5b9b0fbe713c3cab12c",
+  "policy_hz": 50.0,
+  "home_rad": [
+   0.0,
+   -0.6,
+   1.1,
+   -0.5,
+   0.0,
+   0.35
+  ],
+  "action_scale_rad": [
+   1.0,
+   1.2,
+   1.2,
+   1.2,
+   1.5,
+   0.6
+  ],
+  "max_target_speed_rad_s": 1.0
+ },
+ "controller": {
+  "file": "configs/controllers/hybrid-001.json",
+  "sha256": "2f4500311e1d18ecbb2e4035aacea8d6e164ec130eb93fb7d50aa505daab768c",
+  "module": "src/le_snail/hybrid.py",
+  "module_sha256": "a2a4c646dce5446fa6802c31fb41c7c1d38e7756a4ca1e9853a582aa4543b423",
+  "commit": "d5c8795"
+ },
+ "bundle": {
+  "source": "runs/hybrid-001-frozen/exported",
+  "policy_sha256": "565ea23876ee375124401685cb3e0d88bb68069e369ffaf4cfc1f1fd4561e2d5",
+  "physics_sha256": "3eeaea6ec929a3028d5a6c102bfa81e0c1df8358dca755db5b2ebbd4e8af56e3",
+  "manifest_sha256": "035536614a8fc08184f31c46ea66cab6a3f1f7610adcea4097a975eec87f2c98",
+  "exporter": "scripts/export_hybrid.py (d5c8795)",
+  "frozen_at_commit": "b686d26"
+ },
+ "targets": {
+  "source": "runs/hybrid-001-targets-50hz",
+  "exporter": "scripts/export_hybrid_targets.py (725502c)",
+  "episode": "crawl: 1500 steps at 50 Hz (30 s), base attitude scripted upright, no action delay, gait from t = 0 (2 s ramp inside the gait)",
+  "crawl_npz_sha256": "44f5a6f85ff6e66b586ffdce5f20207d15a2b192bb3747f7e1c3f1f2e174fc16",
+  "crawl_csv_sha256": "58c341a0cabaccf7d7c88bca9f6094eaf48d6e2951ea427b291d00af77f8d251"
+ },
+ "hardware": "Pending: the #12 agent is confirming the exact real run (window, logs, outcome); the coordinator adds it here.",
+ "sim_metrics_summary": {
+  "nominal": {
+   "crawl_passed": "5/5",
+   "steady_speed_cm_s_mean": 4.39,
+   "cm_per_stroke": 5.21,
+   "cm_per_gait_period": 10.42,
+   "heading_drift_deg_per_10s_linear_fit": [
+    -3.5,
+    -2.8,
+    -2.4,
+    -2.9,
+    -3.8
+   ]
+  },
+  "robust": {
+   "crawl_passed": "5/5",
+   "steady_speed_cm_s_mean": 3.44,
+   "cm_per_stroke": 4.08,
+   "cm_per_gait_period": 8.16,
+   "heading_drift_deg_per_10s_linear_fit": [
+    -5.6,
+    -3.4,
+    -3.8,
+    -6.2,
+    -6.2
+   ]
+  },
+  "heavy": {
+   "crawl_passed": "5/5",
+   "steady_speed_cm_s_mean": 4.47,
+   "cm_per_stroke": 5.3,
+   "cm_per_gait_period": 10.6,
+   "heading_drift_deg_per_10s_linear_fit": [
+    -3.3,
+    -3.7,
+    -3.8,
+    -4.0,
+    -3.7
+   ]
+  },
+  "rated": {
+   "crawl_passed": "5/5",
+   "steady_speed_cm_s_mean": 3.44,
+   "cm_per_stroke": 4.08,
+   "cm_per_gait_period": 8.16,
+   "heading_drift_deg_per_10s_linear_fit": [
+    -5.6,
+    -3.4,
+    -3.8,
+    -6.2,
+    -6.2
+   ]
+  },
+  "heavy-rated": {
+   "crawl_passed": "5/5",
+   "steady_speed_cm_s_mean": 4.47,
+   "cm_per_stroke": 5.3,
+   "cm_per_gait_period": 10.6,
+   "heading_drift_deg_per_10s_linear_fit": [
+    -3.3,
+    -3.7,
+    -3.8,
+    -4.0,
+    -3.7
+   ]
+  }
+ },
+ "frozen_record": {
+  "path": "runs/best_forward_move_1/ (GPU host, untracked)",
+  "manifest_sha256": "04979f3fd72e7ca6a2ed21a751fe4e18ad49aae03a8b2a9488a4051fa2b34160",
+  "files_sha256": {
+   "exported/manifest.json": "035536614a8fc08184f31c46ea66cab6a3f1f7610adcea4097a975eec87f2c98",
+   "exported/policy.json": "ae11c223535a0903340cc034f8dd644fedeaba94e093a9ec1d4463aa550a64dd",
+   "exported/policy.pt": "565ea23876ee375124401685cb3e0d88bb68069e369ffaf4cfc1f1fd4561e2d5",
+   "exported/sim.json": "3eeaea6ec929a3028d5a6c102bfa81e0c1df8358dca755db5b2ebbd4e8af56e3",
+   "controller/hybrid-001.json": "2f4500311e1d18ecbb2e4035aacea8d6e164ec130eb93fb7d50aa505daab768c",
+   "controller/hybrid.py": "a2a4c646dce5446fa6802c31fb41c7c1d38e7756a4ca1e9853a582aa4543b423",
+   "contract/policy-50hz-001.json": "ae11c223535a0903340cc034f8dd644fedeaba94e093a9ec1d4463aa550a64dd",
+   "targets/crawl.npz": "44f5a6f85ff6e66b586ffdce5f20207d15a2b192bb3747f7e1c3f1f2e174fc16",
+   "targets/crawl.csv": "58c341a0cabaccf7d7c88bca9f6094eaf48d6e2951ea427b291d00af77f8d251",
+   "targets/summary.json": "df91285431c55b7d717e3a18fdb7913d4e5f7dd7646cbdf9c774a3a21b76bff1"
+  }
+ }
+}

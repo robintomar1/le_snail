@@ -16,6 +16,7 @@ Optional refinements (#15; absent keys keep the earlier behaviour exactly):
       rocks 40-55 deg in pitch with roll ~0) while sideways tilt and large pitch are
   lane_per_s:     -w * dt * ramp(|y - y_start|, lane_band_m)                   always
   heading_per_s:  -w * dt * ramp(|yaw|, heading_band_deg) * gate               world heading against +x
+      (heading_requires_crawl_mode: also * crawling, so get-ups and the turn they leave are not charged)
   contact_per_s:  -w * dt * [a non-support link touches the ground] * gate     support = base and gripper
 """
 import math
@@ -90,7 +91,8 @@ def two_portion_terms(config, bank, *, upright, features, x, x_record, previous_
         terms['lane'] = -config['lane_per_s'] * dt * ramp(lateral.abs(), *config['lane_band_m'])
     if config.get('heading_per_s'):
         low, high = (math.radians(v) for v in config['heading_band_deg'])
-        terms['heading'] = -config['heading_per_s'] * dt * ramp(yaw.abs(), low, high) * gate
+        heading_gate = gate * crawling.float() if config.get('heading_requires_crawl_mode', False) else gate
+        terms['heading'] = -config['heading_per_s'] * dt * ramp(yaw.abs(), low, high) * heading_gate
     if config.get('contact_per_s'):
         terms['contact'] = -config['contact_per_s'] * dt * other_contact.float() * gate
     return terms, phi, torch.maximum(x_record, x)

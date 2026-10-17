@@ -15,6 +15,20 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### best_forward_move_1 recorded (robin via coordinator, 2026-10-17)
+
+- The hybrid-001 rock-and-drag gait "D-balanced", the one that moved the real arm forward, is frozen as `runs/best_forward_move_1/` (copies of the frozen bundle, controller config and module, contract, and 50 Hz crawl targets; `manifest.json` holds the sha256 of each file, the gait parameters and sim metrics). Tracked pointer: `configs/controllers/best_forward_move_1.json`. hybrid-001 and `runs/hybrid-001-frozen` are unchanged. Speed re-tuning is not approved yet.
+- Sim metrics from the 5320 acceptance logs. Nominal: 4.39 cm/s steady, 5.2 cm per 1.19 s stroke. Robust: 3.44 cm/s. Heading drifts -3 to -6 deg per 10 s, with a +/-5 deg wobble from the pan cycle. The real arm went +18 deg (left) in its first 10 s.
+
+### two-portion-hybrid-003 (crawl-only heading penalty) STOPPED by pre-registered rule after chunk A (2026-10-17, ~04:45 UTC)
+
+- robin (direct, 2026-10-17): "yes go ahead with the crawl-only heading penalty". Config `configs/experiments/two-portion-hybrid-003.json` = 002 + heading -1.0/s * ramp(|world yaw|, 15-60 deg) only while crawling (commit 0f7ae9e). Pre-registration posted 02:44:25Z.
+- Chunk A (`runs/two-portion-hybrid-003-600`, resumed from 002-500, iterations 495-594): export parity passed. Training speed flag `flag_sustained_driven_proxy` true (longest 0.085 s, gripper), the same review-only flag as 002. Training upright falls per window: 599, 1827, 2035, 1762, 1986, 1060, 878, 1182, 869, 723. That is over 2 x 463 in 6 of 10 windows, so STOP. Left official-start stable get-ups fell from ~1100/window to 12-57; forward/step fell from 0.0126 to 0.005; noise std rose from 2.99 to 3.92.
+- Dev eval 5520-5534 (`runs/evaluation-two-portion-hybrid-003-600-dev-5520`): crawl 2/5, LEFT 0/5, RIGHT 1/5, so STOP. Crawl final |heading| was 178, 74, 82, 125 and 19 deg (mean 96 vs chunk 5's 135). The passing crawls reach 50 cm in ~11 s.
+- Exploit (video and logs): all 5 left trials freeze in a bridge pose at cos ~0.69 from ~3 s to the 30 s timeout. That is under the 0.8 crawl-mode entry, so the heading charge never starts while most of the standing pay is still earned. 4 of 5 right trials slide out of the lane while getting up.
+- Cause: the charge (1.0/s) exceeds what being fully up earns over hovering or lying down (standing pay 0.25/s), and it is avoided by staying out of crawl mode. Any penalty gated on crawl mode can be escaped this way.
+- Do not resume from 003-600. The next run starts from `runs/two-portion-hybrid-002-500/model_final.pt` (left/right 5/5 in dev). A replacement design goes to robin before any new run. Dev seed blocks used so far: up to 5534; acceptance 5500-5514 still held.
+
 ### Track B chunks 1-2 reviewed; continuing two-portion-hybrid-002 to 500 (2026-10-16, ~20:45 UTC)
 
 - robin (direct): drop the heading penalty for chunk 2 (`configs/experiments/two-portion-hybrid-002.json`); "if chunk 2 shows decent progress continue it till 500, otherwise pick the laptop's plan". Decent-progress definition pre-registered in the comm file at 18:49:20Z.
