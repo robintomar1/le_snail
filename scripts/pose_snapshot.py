@@ -45,6 +45,8 @@ def main():
         'median_ticks': np.median(pos, 0).tolist(), 'spread_ticks': np.ptp(pos, 0).tolist(),
         'min_ticks': pos.min(0).tolist(), 'max_ticks': pos.max(0).tolist(),
     }
+    if args.track:
+        summary['positions'] = pos.tolist()
     print(f'{args.label}: {len(rows)} samples, {lost} lost')
     for k, i in enumerate(args.ids):
         extra = f'  min {pos[:, k].min()}  max {pos[:, k].max()}' if args.track else ''
