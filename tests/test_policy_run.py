@@ -81,6 +81,7 @@ def run(tmp_path, monkeypatch):
     def go(sim, bundle, mode='live', extra=(), imu=None):
         imu = imu or FakeImu()
         monkeypatch.setattr(module, 'open_bus_port', lambda path: sim)
+        monkeypatch.setattr(module, 'resolve_servo_port', lambda path: path)
         monkeypatch.setattr(module, 'open_imu', lambda hardware, rotation: imu)
         monkeypatch.setattr(module, 'stdin_has_line', lambda: True)
         monkeypatch.setattr('sys.stdin', io.StringIO('\n'))
@@ -286,3 +287,17 @@ def test_a_servo_missing_from_the_start_dump_is_reported_not_masked(run, tmp_pat
     del sim.memory[3]                      # e.g. the elbow does not answer
     with pytest.raises(SystemExit, match='id 3'):
         run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), mode='shadow')
+
+
+def test_servo_port_falls_back_to_the_only_servo_adapter_present(tmp_path):
+    spec = importlib.util.spec_from_file_location('policy_run', SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    present = tmp_path / 'usb-1a86_USB_Single_Serial_OTHER-if00'
+    present.touch()
+    pattern = str(tmp_path / 'usb-1a86_*')
+    assert module.resolve_servo_port(str(present), pattern) == str(present)
+    assert module.resolve_servo_port(str(tmp_path / 'usb-1a86_gone'), pattern) == str(present)
+    (tmp_path / 'usb-1a86_USB_Single_Serial_THIRD-if00').touch()
+    with pytest.raises(SystemExit, match='servo adapter'):
+        module.resolve_servo_port(str(tmp_path / 'usb-1a86_gone'), pattern)

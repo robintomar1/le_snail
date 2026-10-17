@@ -23,6 +23,7 @@ torque (the end first holds the last goal until Enter).
 import argparse
 from datetime import datetime, timezone
 import gc
+import glob
 import hashlib
 import os
 import json
@@ -76,6 +77,25 @@ def first_imu_sample(imu, max_age_s, wait_s=2.0):
             if time.monotonic() > deadline:
                 raise SystemExit(f'IMU not streaming fresh samples: {error}' + (f' ({error.__cause__!r})' if error.__cause__ else ''))
             time.sleep(0.02)
+
+
+SERVO_ADAPTERS = '/dev/serial/by-id/usb-1a86_*'   # CH343/CH340 serial chips on the servo boards and the ESP32 bridge
+
+
+def resolve_servo_port(configured, pattern=SERVO_ADAPTERS):
+    """The configured servo port, or the only servo adapter present when that one is missing.
+
+    The adapter's serial number names the USB board, not the arm, so boards get swapped between arms; the
+    homing-offset check against the joint map still confirms which arm is on the bus.
+    """
+    if os.path.exists(configured):
+        return configured
+    found = sorted(glob.glob(pattern))
+    if len(found) != 1:
+        raise SystemExit(f'Servo port {configured} not found and {len(found)} servo adapters present {found}; '
+                         'set servo_port in the hardware config')
+    print(f'servo port {configured} not found; using the only servo adapter present: {found[0]}')
+    return found[0]
 
 
 def open_imu(hardware, rotation):
@@ -159,6 +179,7 @@ def main():
         policy(torch.zeros((1, 24)))
 
     imu = open_imu(hardware, rotation)
+    hardware['servo_port'] = resolve_servo_port(hardware['servo_port'])
     port = open_bus_port(hardware['servo_port'])
     bus = ServoBus(port, timeout_s=args.timeout_ms / 1000, allow_writes=live)
     recorder = Recorder(bus, jmap.ids, limits)
