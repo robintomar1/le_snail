@@ -15,10 +15,12 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
-### two-portion-hybrid-004 (forward pay scaled by heading): CONTINUE at 50, running to 100 (2026-10-17)
+### two-portion-hybrid-004 (forward pay scaled by heading): done at 100 by robin's cap; crawl 2/5, left 5/5, right 5/5 (2026-10-17)
 
 - robin (direct): "yeah go ahead, look at the data at 50 training steps and only go till 100 if you see improvement". Config `configs/experiments/two-portion-hybrid-004.json` = 002 + `forward_heading_floor` 0.25 over `forward_heading_band_deg` [15, 60] (commit a6d7bdb). Resumed from 002-500.
-- At 50 (`runs/two-portion-hybrid-004-550`, iterations 495-544): official get-ups ~95-100% both sides; upright falls 250-848/window (limit 926); noise std 3.02 -> 3.43. Dev eval 5540-5554: crawl 2/5 (mean |final heading| 103 vs 135), LEFT 5/5, RIGHT 4/5. Videos show genuine crawling and get-ups, so CONTINUE by the pre-registered rule. Last 50 running -> `runs/two-portion-hybrid-004-600`; then dev eval 5560-5574.
+- At 50 (`runs/two-portion-hybrid-004-550`, iterations 495-544): official get-ups ~95-100% both sides; upright falls 250-848/window (limit 926); noise std 3.02 -> 3.43. Dev eval 5540-5554: crawl 2/5 (mean |final heading| 103 vs 135), LEFT 5/5, RIGHT 4/5. Videos show genuine crawling and get-ups, so CONTINUE by the pre-registered rule. Last 50 ran -> `runs/two-portion-hybrid-004-600`.
+- At 100 (END of robin's cap; `runs/two-portion-hybrid-004-600`, iterations 544-593): training get-ups ~95-100%, upright falls 668 -> 268/window, noise std 3.50 -> 3.96. Dev eval 5560-5574: crawl 2/5 (mean |final heading| back to 135; all 3 fails are lane exits at 42-49 cm), LEFT 5/5, RIGHT 5/5, so not a candidate. Crawl/left/right: 002-500 1/5/5, 004-550 2/5/4, 004-600 2/5/5.
+- Diagnosis: the 001 contract gives the policy no heading (q, qd, gravity, gyro, previous action; feed-forward, no memory), so it cannot steer back to +x. Proposed to robin: contract 002 with sin/cos of yaw relative to the start, warm-started from 004-600 with zero first-layer weights for the new inputs.
 - Also: evaluate.py traces now carry observation, action_raw, target_rad and applied_target_rad (7b8c3ff). A rerun of the 002-500 dev eval on 5480 reproduces it exactly. Real-arm deployment reference for 002-500 (target ranges, step 0-10 observations and actions): `runs/deployment-reference-002-500/deployment-reference.json`.
 
 ### best_forward_move_1 recorded (robin via coordinator, 2026-10-17)
