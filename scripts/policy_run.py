@@ -72,7 +72,7 @@ def first_imu_sample(imu, max_age_s, wait_s=2.0):
             return imu.read(max_age_s)
         except RuntimeError as error:
             if time.monotonic() > deadline:
-                raise SystemExit(f'IMU not streaming fresh samples: {error}')
+                raise SystemExit(f'IMU not streaming fresh samples: {error}' + (f' ({error.__cause__!r})' if error.__cause__ else ''))
             time.sleep(0.02)
 
 
