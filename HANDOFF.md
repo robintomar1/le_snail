@@ -15,6 +15,11 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### best_forward_move_1 recorded (robin via coordinator, 2026-10-17)
+
+- The hybrid-001 rock-and-drag gait "D-balanced", the one that moved the real arm forward, is frozen as `runs/best_forward_move_1/` (copies of the frozen bundle, controller config and module, contract, and 50 Hz crawl targets; `manifest.json` holds the sha256 of each file, the gait parameters and sim metrics). Tracked pointer: `configs/controllers/best_forward_move_1.json`. hybrid-001 and `runs/hybrid-001-frozen` are unchanged. Speed re-tuning is not approved yet.
+- Sim metrics from the 5320 acceptance logs. Nominal: 4.39 cm/s steady, 5.2 cm per 1.19 s stroke. Robust: 3.44 cm/s. Heading drifts -3 to -6 deg per 10 s, with a +/-5 deg wobble from the pan cycle. The real arm went +18 deg (left) in its first 10 s.
+
 ### two-portion-hybrid-003 (crawl-only heading penalty) STOPPED by pre-registered rule after chunk A (2026-10-17, ~04:45 UTC)
 
 - robin (direct, 2026-10-17): "yes go ahead with the crawl-only heading penalty". Config `configs/experiments/two-portion-hybrid-003.json` = 002 + heading -1.0/s * ramp(|world yaw|, 15-60 deg) only while crawling (commit 0f7ae9e). Pre-registration posted 02:44:25Z.
