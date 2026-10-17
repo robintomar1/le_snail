@@ -258,3 +258,24 @@ def test_cpu_affinity_from_the_hardware_config_is_applied(run, tmp_path, monkeyp
     monkeypatch.setattr(os, 'sched_setaffinity', lambda pid, cpus: applied.append((pid, set(cpus))))
     meta = run(SimServos(), make_bundle(tmp_path / 'b', [0.0] * 6), mode='shadow')
     assert applied == [(0, {0})] and meta['cpu_affinity'] == [0]
+
+
+class SideImu(FakeImu):
+    """Base lying on its side (sim 'left' start gravity)."""
+    def read(self, max_age_s):
+        sample = super().read(max_age_s)
+        return dict(sample, gravity=np.array([0.039, -0.994, 0.101]))
+
+
+def test_require_upright_refuses_to_start_the_policy_on_a_fallen_robot(run, tmp_path):
+    sim = SimServos()
+    meta = run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics', '--require-upright'],
+               imu=SideImu())
+    assert 'not upright' in meta['abort'] and meta['policy_steps'] == 0
+    assert all(m[40] == 0 for m in sim.memory.values())
+    assert len(meta['log']['ramp_gravity']) > 0            # the IMU is logged during the ramp and hold
+
+
+def test_ramp_imu_is_logged_on_normal_runs_too(run, tmp_path):
+    meta = run(SimServos(), make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics'])
+    assert meta['abort'] is None and len(meta['log']['ramp_gravity']) == len(meta['log']['ramp_time_s']) > 5

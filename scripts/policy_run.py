@@ -41,7 +41,8 @@ from le_snail.hardware import Bno085Imu, ImuSerial  # noqa: E402
 from le_snail.servo_bus import STATE_BLOCK, ServoBus, dump_servos, open_bus_port  # noqa: E402
 
 MAX_SECONDS = 30.0
-MAX_RAMP_SPEED_RAD_S = 0.5   # the start ramp is stretched to stay under this, whatever --ramp-s says
+MAX_RAMP_SPEED_RAD_S = 0.5
+UPRIGHT_COS = 0.7            # --require-upright: base tilt must be under ~45 deg when the policy would start   # the start ramp is stretched to stay under this, whatever --ramp-s says
 
 
 def proper_rotation(matrix):
@@ -124,6 +125,8 @@ def main():
     parser.add_argument('--max-imu-age-s', type=float, default=0.06,
                         help='IMU sample age limit (3 steps: a BNO085 on bit-banged I2C occasionally misses one 20 ms report)')
     parser.add_argument('--timeout-ms', type=float, default=10.0)
+    parser.add_argument('--require-upright', action='store_true',
+                        help='live: do not start the policy unless the base is upright after the ramp (crawl tests)')
     parser.add_argument('--allow-unvalidated-physics', action='store_true',
                         help='live: run a policy whose physics is not validated against the real robot (operator decision)')
     parser.add_argument('--out', type=Path, default=Path('runs/policy-runs'))
@@ -160,6 +163,7 @@ def main():
     bus = ServoBus(port, timeout_s=args.timeout_ms / 1000, allow_writes=live)
     recorder = Recorder(bus, jmap.ids, limits)
     steps = Steps()
+    ramp_log = {'ramp_time_s': [], 'ramp_gravity': []}   # IMU during the start ramp and hold
     servos_before = servos_after = None
     torque_on, finished, abort, interrupted, torque_release = False, False, None, False, None
     try:
@@ -207,10 +211,21 @@ def main():
             t0 = time.monotonic()
             for k, goal in enumerate(goals):
                 recorder.command(goal)
+                try:
+                    ramp_sample = imu.read(args.max_imu_age_s)
+                    ramp_log['ramp_time_s'].append(time.monotonic() - t0)
+                    ramp_log['ramp_gravity'].append(ramp_sample['gravity'])
+                except RuntimeError:
+                    pass   # the policy loop applies the IMU checks; here it is only logged
                 while abort is None and time.monotonic() - t0 < (k + 1) * dt:
                     abort = recorder.cycle()
                 if abort:
                     break
+            if abort is None and args.require_upright:
+                gravity = imu.read(args.max_imu_age_s)['gravity']
+                if -gravity[2] < UPRIGHT_COS:
+                    abort = (f'base not upright after the ramp (gravity in base frame {np.round(gravity, 2).tolist()}, '
+                             f'tilt {np.degrees(np.arccos(np.clip(-gravity[2], -1, 1))):.0f} deg); policy not started')
         target = home.copy() if live else None
         estimator = VelocityEstimator(contract.velocity_filter_alpha)
         start = time.monotonic()
@@ -308,7 +323,7 @@ def main():
     utc = datetime.now(timezone.utc)
     args.out.mkdir(parents=True, exist_ok=True)
     stem = args.out / f'{args.mode}-{args.bundle.parent.name}-{utc.strftime("%Y%m%dT%H%M%SZ")}'
-    summary = recorder.save(stem, steps.arrays())
+    summary = recorder.save(stem, {**steps.arrays(), **{k: np.array(v) for k, v in ramp_log.items()}})
     steps.jsonl(stem.with_suffix('.jsonl'))
     meta = {'utc': utc.isoformat(), 'mode': args.mode, 'bundle': str(args.bundle), 'policy_sha256': manifest['policy_sha256'],
             'contract_fingerprint': contract.fingerprint, 'physics_validated': manifest.get('physics_validated'),
