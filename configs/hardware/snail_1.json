@@ -1,6 +1,6 @@
 {
   "arm": "snail_1 (first SO-101 unit, no gripper servo)",
-  "servo_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_58FA079912-if00",
+  "servo_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5AE6057765-if00",
   "imu_port": "/dev/serial/by-id/usb-Xsens_Motion_Tracker_Dev._Board_DB2GZ7KQ-if00-port0",
   "imu_baudrate": 115200,
   "joint_map": "configs/joint-maps/so101-esp32-arm-2026-10-17.json",
