@@ -233,7 +233,7 @@ def main():
             try:
                 sample = imu.read(args.max_imu_age_s)
             except RuntimeError as error:
-                abort = f'IMU: {error}'
+                abort = f'IMU: {error}' + (f' ({error.__cause__!r})' if error.__cause__ else '')
                 break
             ticks = np.array([states[sid]['position'] for sid in jmap.ids])
             q = jmap.to_rad(ticks, virtual_rad=target if target is not None else home)
