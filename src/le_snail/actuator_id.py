@@ -130,6 +130,30 @@ def urdf_to_ticks(targets_rad, signs, offsets):
     return np.rint(np.asarray(offsets) + np.asarray(signs) * np.asarray(targets_rad) * TICKS_PER_RAD).astype(int)
 
 
+class JointTickMap:
+    """Policy joint vector (URDF rad, contract order) <-> goal/present ticks of the servos a joint map lists.
+
+    Joints missing from the map (e.g. a gripper without a servo) are virtual: they get no ticks, and
+    to_rad fills them from virtual_rad, which the caller sets to their last applied target.
+    """
+    def __init__(self, joints, joint_names):
+        self.names = list(joint_names)
+        mapped = [i for i, name in enumerate(self.names) if name in joints]
+        self.index = np.array(mapped, dtype=int)
+        self.ids = [joints[self.names[i]]['id'] for i in mapped]
+        self.signs = np.array([joints[self.names[i]]['sign'] for i in mapped], dtype=float)
+        self.offsets = np.array([joints[self.names[i]]['offset_ticks'] for i in mapped], dtype=float)
+        self.virtual = [name for name in self.names if name not in joints]
+
+    def to_ticks(self, q_rad):
+        return urdf_to_ticks(np.asarray(q_rad, dtype=float)[self.index], self.signs, self.offsets)
+
+    def to_rad(self, ticks, virtual_rad):
+        q = np.array(virtual_rad, dtype=float)
+        q[self.index] = (np.asarray(ticks, dtype=float) - self.offsets) / (self.signs * TICKS_PER_RAD)
+        return q
+
+
 # Motions are integer goal-tick arrays of shape (samples, joints) at a fixed command rate.
 
 def ramp(start, goal, duration_s, rate_hz):

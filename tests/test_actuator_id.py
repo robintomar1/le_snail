@@ -181,3 +181,14 @@ def test_urdf_targets_map_to_ticks_through_sign_and_offset():
     assert ticks.dtype.kind == 'i'
     assert ticks[0].tolist() == [2053, 2064]
     assert ticks[1].tolist() == [round(2053 + TICKS_PER_RAD), round(2063.5 + 0.5 * TICKS_PER_RAD)]
+
+
+def test_joint_tick_map_keeps_unmapped_joints_virtual():
+    from le_snail.actuator_id import TICKS_PER_RAD, JointTickMap
+    joints = {'a': {'id': 1, 'sign': 1, 'offset_ticks': 2000.0}, 'c': {'id': 3, 'sign': -1, 'offset_ticks': 2100.0}}
+    m = JointTickMap(joints, ['a', 'b', 'c'])
+    assert m.ids == [1, 3] and m.virtual == ['b']
+    ticks = m.to_ticks(np.array([0.5, 0.2, 0.1]))
+    assert ticks.tolist() == [round(2000 + 0.5 * TICKS_PER_RAD), round(2100 - 0.1 * TICKS_PER_RAD)]
+    q = m.to_rad(ticks, virtual_rad=np.array([9.0, 0.2, 9.0]))
+    assert np.allclose(q, [0.5, 0.2, 0.1], atol=1 / TICKS_PER_RAD)

@@ -87,6 +87,7 @@ class Recorder:
         self.sent, self.received, self.lost, self.raw, self.valid = [], [], [], [], []
         self.commands, self.events = [], []  # (sent_ns, flushed_ns, goal) / (name, sent_ns, flushed_ns, values)
         self.recent, self.consecutive_lost = deque(), 0
+        self.last_complete = None  # (received_ns, {id: state}) of the newest cycle with every id answering
 
     def write(self, name, values, register):
         sent, flushed = self.bus.sync_write(values, *register)
@@ -115,6 +116,8 @@ class Recorder:
         self.valid.append([sid in result.replies for sid in self.ids])
         self.consecutive_lost = self.consecutive_lost + 1 if result.lost else 0
         states = {sid: decode_state(params) for sid, (_, params) in result.replies.items()}
+        if len(states) == len(self.ids):
+            self.last_complete = (result.received_ns, states)
         reference = None
         if self.recent:
             while len(self.recent) > 1 and self.recent[1][0] <= result.received_ns - SETTLE_S * 1e9:
