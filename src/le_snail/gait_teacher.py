@@ -54,7 +54,7 @@ class PhaseGait(torch.nn.Module):
 
     def _gait(self, t: torch.Tensor) -> torch.Tensor:
         x = 2 * math.pi * t[:, None] / self.period * self.m + self.psi
-        w = torch.tanh(self.k * torch.sin(x)) / math.tanh(self.k)
+        w = torch.tanh(self.k * torch.sin(x)) / math.tanh(self.k) if self.k > 0.05 else torch.sin(x)   # as hybrid.py
         return torch.clamp(self.c + self.amplitude * w, -1., 1.)
 
     @torch.jit.export
