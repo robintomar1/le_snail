@@ -9,6 +9,22 @@
     7
   ],
   "cpu_affinity_note": "Rubik Pi (QCS6490): core 7 is the fastest core",
-  "imu_rotation_base_from_sensor": null,
-  "imu_rotation_note": "NOT MEASURED for the Xsens on this arm: base flat reading + forward-tilt check first"
+  "imu_rotation_base_from_sensor": [
+    [
+      -0.02,
+      -0.0007,
+      -0.9998
+    ],
+    [
+      -0.006,
+      1.0,
+      -0.0006
+    ],
+    [
+      0.9998,
+      0.006,
+      -0.02
+    ]
+  ],
+  "imu_rotation_note": "Copied from arm1 (same Xsens board, mounted the same way on the base back face per robin, 2026-10-17); not measured on this arm. Check the pre-prompt gravity print: flat base ~[0, 0, -1]."
 }
