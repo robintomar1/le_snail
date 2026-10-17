@@ -15,6 +15,12 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### two-portion-hybrid-004 (forward pay scaled by heading): CONTINUE at 50, running to 100 (2026-10-17)
+
+- robin (direct): "yeah go ahead, look at the data at 50 training steps and only go till 100 if you see improvement". Config `configs/experiments/two-portion-hybrid-004.json` = 002 + `forward_heading_floor` 0.25 over `forward_heading_band_deg` [15, 60] (commit a6d7bdb). Resumed from 002-500.
+- At 50 (`runs/two-portion-hybrid-004-550`, iterations 495-544): official get-ups ~95-100% both sides; upright falls 250-848/window (limit 926); noise std 3.02 -> 3.43. Dev eval 5540-5554: crawl 2/5 (mean |final heading| 103 vs 135), LEFT 5/5, RIGHT 4/5. Videos show genuine crawling and get-ups, so CONTINUE by the pre-registered rule. Last 50 running -> `runs/two-portion-hybrid-004-600`; then dev eval 5560-5574.
+- Also: evaluate.py traces now carry observation, action_raw, target_rad and applied_target_rad (7b8c3ff). A rerun of the 002-500 dev eval on 5480 reproduces it exactly. Real-arm deployment reference for 002-500 (target ranges, step 0-10 observations and actions): `runs/deployment-reference-002-500/deployment-reference.json`.
+
 ### best_forward_move_1 recorded (robin via coordinator, 2026-10-17)
 
 - The hybrid-001 rock-and-drag gait "D-balanced", the one that moved the real arm forward, is frozen as `runs/best_forward_move_1/` (copies of the frozen bundle, controller config and module, contract, and 50 Hz crawl targets; `manifest.json` holds the sha256 of each file, the gait parameters and sim metrics). Tracked pointer: `configs/controllers/best_forward_move_1.json`. hybrid-001 and `runs/hybrid-001-frozen` are unchanged. Speed re-tuning is not approved yet.
