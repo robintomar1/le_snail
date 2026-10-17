@@ -15,6 +15,14 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### gait-clone-001: hybrid-001's crawl gait cloned into an ordinary 24-input policy; crawl 5/5 (2026-10-17)
+
+- robin (direct): "can we make a new policy to crawl like the hybrid gait?"
+- Teacher: `src/le_snail/gait_teacher.py` PhaseGait, the D-balanced gait with its phase read off the applied target (nearest point on the steady-state slewed cycle, searched just ahead) instead of a clock (a9af1bc). Bundle `runs/phase-gait-001/exported` (`export_hybrid.py --phase-gait`). Robust dev 5600-5614: crawl 5/5, 3.3-4.0 cm/s, |yaw| <= 8 deg, lateral <= 2 cm.
+- Student: `scripts/clone_gait.py`, DAgger over 1024 robust upright envs, 6 x 15 s rounds (beta 1, .5, .25, 0, 0, 0), a frozen obs normalizer plus MLP 24-128-128-6 ELU (the RSL actor's shape). About 2.5 min. Run `runs/gait-clone-001`; bundle `runs/gait-clone-001/exported` (`student.pt` holds the weights). Student terminations fell from 1.45 to 0.51 per env-minute over the pure-student rounds.
+- Robust dev 5620-5634: CRAWL 5/5 in 15.4-18.0 s, 3.2-3.8 cm/s, final |yaw| <= 6 deg, lateral <= 2.5 cm. Left/right 0/5 (no get-up, as expected). No speed flags; the video shows the rock-and-drag gait.
+- Next (robin to decide): merge with 004-600's get-ups into one policy (DAgger with a composite teacher: PhaseGait while upright, 004-600 while down), and/or try the clone on the real arm through the laptop's runner.
+
 ### two-portion-hybrid-004 (forward pay scaled by heading): done at 100 by robin's cap; crawl 2/5, left 5/5, right 5/5 (2026-10-17)
 
 - robin (direct): "yeah go ahead, look at the data at 50 training steps and only go till 100 if you see improvement". Config `configs/experiments/two-portion-hybrid-004.json` = 002 + `forward_heading_floor` 0.25 over `forward_heading_band_deg` [15, 60] (commit a6d7bdb). Resumed from 002-500.
