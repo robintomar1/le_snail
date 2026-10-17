@@ -105,7 +105,32 @@
   "crawl_npz_sha256": "44f5a6f85ff6e66b586ffdce5f20207d15a2b192bb3747f7e1c3f1f2e174fc16",
   "crawl_csv_sha256": "58c341a0cabaccf7d7c88bca9f6094eaf48d6e2951ea427b291d00af77f8d251"
  },
- "hardware": "Pending: the #12 agent is confirming the exact real run (window, logs, outcome); the coordinator adds it here.",
+ "hardware": {
+  "status": "ran on hardware 2026-10-17T03:11:52Z; distance not measured",
+  "what_ran": "open-loop playback of the first 10.0 s (500 samples at 50 Hz, ~8.5 strokes of 1.186 s) of targets/crawl.npz; gait only (base scripted upright in the export), no fall detection or recovery; the closed-loop TorchScript bundle has NOT run on the real arm",
+  "arm": "snail_1 (first SO-101), ESP32-S3 CH343 pass-through bus (Waveshare USB-C broken), 5 servos (ids 1-5); gripper skipped (no motor fitted)",
+  "joint_map": {
+   "file": "configs/joint-maps/so101-esp32-arm-2026-10-17.json",
+   "sha256": "6e1f2aa2e10eb5c22c755d613e4b25663e0ec41dec80d5947f6917ceed244ea1",
+   "valid_for": "snail_1 only, while EEPROM Homing_Offsets stay 596/756/-129/1340/-920"
+  },
+  "outcome": {
+   "aborted": false,
+   "lost_replies": 0,
+   "loop_hz": 242,
+   "tracking": "joints ~100 ms behind target, 0.08 rad rms",
+   "load_peak_duty": 0.25,
+   "current_peak_per_servo_A": 0.08,
+   "current_total_A": 0.19,
+   "current_units_verified": false,
+   "voltage_min_V": 11.0,
+   "temperature_C": "33-35, flat",
+   "base_imu": "36 deg nose-down after the ramp (cos 0.81 vs sim settled crawl 0.83); rocks 14-40 deg nose-down per stroke at 0.80 Hz (gait 0.84 Hz); roll within +/-1.2 deg; heading +18 deg (left) at t = 10 s (sim trend is a slight right drift, -3 to -6 deg per 10 s; trend vs pan-cycle wobble not yet separated)",
+   "robin": "the arm moved fine, it looked nice, it was just a bit slow",
+   "distance_cm": null
+  },
+  "record": "runs/best_forward_move_1/hardware/run.json (force-added to git at tag best_forward_move_1)"
+ },
  "sim_metrics_summary": {
   "nominal": {
    "crawl_passed": "5/5",

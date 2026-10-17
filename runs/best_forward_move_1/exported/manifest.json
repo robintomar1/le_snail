@@ -1,0 +1,83 @@
+{
+  "schema_version": 1,
+  "contract_fingerprint": "4f23c9185ab0b7255e21837c300078f951c026891190e5b9b0fbe713c3cab12c",
+  "policy_sha256": "565ea23876ee375124401685cb3e0d88bb68069e369ffaf4cfc1f1fd4561e2d5",
+  "physics_sha256": "3eeaea6ec929a3028d5a6c102bfa81e0c1df8358dca755db5b2ebbd4e8af56e3",
+  "observation_size": 24,
+  "action_size": 6,
+  "stage": "scripted",
+  "isaac_lab": "2.3.2",
+  "isaac_sim": "5.1.0",
+  "rsl_rl": "3.0.1",
+  "asset_source": {
+    "repository": "https://github.com/TheRobotStudio/SO-ARM100",
+    "commit": "a758567c3978dfeefe282ede0500085a48fe8f78"
+  },
+  "asset_validation": {
+    "source_sha256": "3a65d2d35e68a8d2f0c2cc176d19b884506543c93ba72980145b80abe276022c",
+    "prepared_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+    "restored_collision_links": [],
+    "mesh_sha256": {
+      "assets/base_motor_holder_so101_v1.stl": "8cd2f241037ea377af1191fffe0dd9d9006beea6dcc48543660ed41647072424",
+      "assets/base_so101_v2.stl": "bb12b7026575e1f70ccc7240051f9d943553bf34e5128537de6cd86fae33924d",
+      "assets/sts3215_03a_v1.stl": "a37c871fb502483ab96c256baf457d36f2e97afc9205313d9c5ab275ef941cd0",
+      "assets/waveshare_mounting_plate_so101_v2.stl": "e197e24005a07d01bbc06a8c42311664eaeda415bf859f68fa247884d0f1a6e9",
+      "assets/motor_holder_so101_base_v1.stl": "31242ae6fb59d8b15c66617b88ad8e9bded62d57c35d11c0c43a70d2f4caa95b",
+      "assets/rotation_pitch_so101_v1.stl": "9be900cc2a2bf718102841ef82ef8d2873842427648092c8ed2ca1e2ef4ffa34",
+      "assets/upper_arm_so101_v1.stl": "475056e03a17e71919b82fd88ab9a0b898ab50164f2a7943652a6b2941bb2d4f",
+      "assets/under_arm_so101_v1.stl": "d01d1f2de365651dcad9d6669e94ff87ff7652b5bb2d10752a66a456a86dbc71",
+      "assets/motor_holder_so101_wrist_v1.stl": "887f92e6013cb64ea3a1ab8675e92da1e0beacfd5e001f972523540545e08011",
+      "assets/sts3215_03a_no_horn_v1.stl": "75ef3781b752e4065891aea855e34dc161a38a549549cd0970cedd07eae6f887",
+      "assets/wrist_roll_pitch_so101_v2.stl": "6c7ec5525b4d8b9e397a30ab4bb0037156a5d5f38a4adf2c7d943d6c56eda5ae",
+      "assets/wrist_roll_follower_so101_v1.stl": "4b17b410a12d64ec39554abc3e8054d8a97384b2dc4a8d95a5ecb2a93670f5f4",
+      "assets/moving_jaw_so101_v1.stl": "785a9dded2f474bc1d869e0d3dae398a3dcd9c0c345640040472210d2861fa9d"
+    },
+    "joint_limits": {
+      "shoulder_pan": {
+        "lower": -1.91986,
+        "upper": 1.91986
+      },
+      "shoulder_lift": {
+        "lower": -1.74533,
+        "upper": 1.74533
+      },
+      "elbow_flex": {
+        "lower": -1.69,
+        "upper": 1.69
+      },
+      "wrist_flex": {
+        "lower": -1.65806,
+        "upper": 1.65806
+      },
+      "wrist_roll": {
+        "lower": -2.74385,
+        "upper": 2.84121
+      },
+      "gripper": {
+        "lower": -0.174533,
+        "upper": 1.74533
+      }
+    },
+    "contract_fingerprint": "10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa",
+    "contact_geometry_validated": false
+  },
+  "installed_versions": {
+    "torch": "2.7.0+cu128",
+    "rsl-rl-lib": "3.0.1",
+    "numpy": "1.26.0"
+  },
+  "physics_validated": false,
+  "controller": {
+    "type": "hybrid_scripted",
+    "config": "configs/controllers/hybrid-001.json",
+    "config_sha256": "2f4500311e1d18ecbb2e4035aacea8d6e164ec130eb93fb7d50aa505daab768c",
+    "module": "src/le_snail/hybrid.py",
+    "module_sha256": "a2a4c646dce5446fa6802c31fb41c7c1d38e7756a4ca1e9853a582aa4543b423",
+    "stateful": true,
+    "reset_required_each_episode": true,
+    "training_performed": false
+  },
+  "physics_source": "configs/experiments/physics-v2-50hz-001.json",
+  "asset_validation_from": "runs/two-portion-50hz-001-100/exported",
+  "reference_training_source_sha256": "f25d69262e4d62c5bd1ec2e9ad1748a278b348d06f1c48454fbd0cb9fe96674e"
+}

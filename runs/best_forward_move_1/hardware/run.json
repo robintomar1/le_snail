@@ -1,0 +1,41 @@
+{
+ "status": "ran on hardware 2026-10-17T03:11:52Z; distance not measured",
+ "what_ran": "open-loop playback of the first 10.0 s (500 samples at 50 Hz, ~8.5 strokes of 1.186 s) of targets/crawl.npz; gait only (base scripted upright in the export), no fall detection or recovery; the closed-loop TorchScript bundle has NOT run on the real arm",
+ "arm": "snail_1 (first SO-101), ESP32-S3 CH343 pass-through bus (Waveshare USB-C broken), 5 servos (ids 1-5); gripper skipped (no motor fitted)",
+ "host": "Rubik Pi 3, Ubuntu 24.04, Python 3.12, checkout 14513e6 (actuator_log.py incl. 88f7a39); converter/joint map/pose tool at 9f9f05c",
+ "pipeline": "scripts/targets_to_motion.py (URDF rad -> ticks via the joint map) then scripts/actuator_log.py <bus> --motion runs/actuator-id/motions/crawl/crawl-10s.npz --allow-motion --start-ticks 2176 1747 2604 1714 2076 --ramp-s 5 --imu <xsens> --out runs/actuator-id/crawl",
+ "joint_map": {
+  "file": "configs/joint-maps/so101-esp32-arm-2026-10-17.json",
+  "sha256": "6e1f2aa2e10eb5c22c755d613e4b25663e0ec41dec80d5947f6917ceed244ea1",
+  "valid_for": "snail_1 only, while EEPROM Homing_Offsets stay 596/756/-129/1340/-920"
+ },
+ "eeprom_prerequisite": "snail_1 servo 4 Min_Position_Limit 1493 -> 920 (robin OK; undo by writing 1493)",
+ "servo_settings": "Acceleration 254 written at start-up; read rate unpaced (242 Hz loop); start-pose margin 100 ticks; 5 s ramp",
+ "abort_envelope": "temp 55 C and voltage 10.0-12.6 V (25-sample median); |load| > 900 for 0.3 s; current > 500; any status bit; tracking error > 228 ticks (0.35 rad); > 5 consecutive lost replies; start drift > 98 ticks",
+ "imu": "Xsens MTi-2 zip-tied to the back face of the base; imu_rotation_base_from_sensor from #11 (2026-10-17)",
+ "outcome": {
+  "aborted": false,
+  "lost_replies": 0,
+  "loop_hz": 242,
+  "tracking": "joints ~100 ms behind target, 0.08 rad rms",
+  "load_peak_duty": 0.25,
+  "current_peak_per_servo_A": 0.08,
+  "current_total_A": 0.19,
+  "current_units_verified": false,
+  "voltage_min_V": 11.0,
+  "temperature_C": "33-35, flat",
+  "base_imu": "36 deg nose-down after the ramp (cos 0.81 vs sim settled crawl 0.83); rocks 14-40 deg nose-down per stroke at 0.80 Hz (gait 0.84 Hz); roll within +/-1.2 deg; heading +18 deg (left) at t = 10 s (sim trend is a slight right drift, -3 to -6 deg per 10 s; trend vs pan-cycle wobble not yet separated)",
+  "robin": "the arm moved fine, it looked nice, it was just a bit slow",
+  "distance_cm": null
+ },
+ "files": {
+  "crawl-10s-20261017T031152Z.json": "4fef1df3fdc60024685c583a4aee98a85bb992e817a5b38eeb07740c1bac109d",
+  "crawl-10s-20261017T031152Z.npz": "9c9b33df87227392024118247fa7e90b79a9670885cabd62235bad1495f132ad",
+  "crawl-10s.npz": "bcb96f8abfb6d971a94cbe41cd1af20ac6518a6f8db8b3a27b0d82ca58349302"
+ },
+ "files_source": {
+  "crawl-10s.npz": "Pi runs/actuator-id/motions/crawl/",
+  "crawl-10s-20261017T031152Z.*": "Pi runs/actuator-id/crawl/ (laptop + GPU copies identical)"
+ },
+ "later_runs": "robin reports running the scripted-controller gait again and seeing forward motion; any later logs are on the Pi in runs/actuator-id/crawl/ (Pi unreachable at record time) and are not part of this record"
+}
