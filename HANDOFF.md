@@ -15,6 +15,17 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Faster gait clone and 3-minute endurance comparison (2026-10-17)
+
+- robin: "GIVE ME ANOTHER VERSION OF IT WHICH IS FASTER". Gait sweeps (`scripts/sweep_gaits.py`, `runs/gait-sweep-00{1,2,3}`): shortening D's period makes it slower (slew-limited). The gait study's A-fast slides sideways, and its drift is set by the shoulder_pan offset (+/-0.075 rad flips it across the lane). With pan c +0.02 (`configs/controllers/fast-gait-001.json`) it runs 6.3 cm/s robust, against D's 3.6. Clone `runs/gait-clone-fast-001`: robust dev 5660-5674 crawl 5/5, 50 cm in 9.2-11.2 s.
+- robin: "TURNING IS ALSO FINE BUT IT SHOULD MOVE". `scripts/endurance.py`: 180 s, robust, lane limit off, 32 envs per bundle (`runs/endurance-002`, per-env tracks in npz). Mean net distance from start / path on 1 s samples:
+  - gait-clone-fast-001: 10.9 m / 11.3 m, 0 falls;
+  - hybrid-001: 6.1 / 6.3;
+  - gait-clone-001: 6.0 / 6.3;
+  - B-clean-drag: 2.8 / 2.8;
+  - 002-500, 004-550, 004-600: 0.4-0.55 / 7.6-8.5. They circle: always moving, but they stay put. 004-550 falls 2.2 times per run and recovers 2.1;
+  - old 20 Hz policies: diversity-seed101-100 3.8 / 10.1, the rest 0.3-1.4 m net; handover-truncation and handover-reward end fallen in about half the runs.
+
 ### gait-clone-001: hybrid-001's crawl gait cloned into an ordinary 24-input policy; crawl 5/5 (2026-10-17)
 
 - robin (direct): "can we make a new policy to crawl like the hybrid gait?"

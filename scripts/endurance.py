@@ -3,7 +3,8 @@
 
 Every bundle (same contract) drives an equal share of the environments from upright starts for --seconds, with the
 lane limit switched off (turning is allowed); falls do not end a run, but lying down for the physics' fallen limit
-does. Per bundle: path length and straight-line distance from the start, mean path speed, the share of time upright
+does. Per bundle: path length (every physics-policy step, and on 1 s samples, which ignores the back-and-forth rocking within a
+stroke) and straight-line distance from the start, mean path speed, the share of time upright
 (cos >= 0.5), falls (cos < 0.5 for 0.5 s) and recoveries (stable upright again), runs ended fallen, total turning,
 and path length per 30 s window, so a policy that stops moving shows up. Physics: the first bundle's sim.json unless
 --physics. Writes only --output (JSON).
@@ -77,6 +78,8 @@ def main():
     stable_steps = torch.zeros(n, device=device)
     turning = torch.zeros(n, device=device)
     end_xy = start.clone()
+    every = round(1. / dt)
+    samples = [start.clone()]   # base xy once per second; path on these ignores the rocking within each stroke
     ended_fallen = torch.zeros(n, dtype=torch.bool, device=device)
 
     def yaw_of(q):
@@ -106,11 +109,15 @@ def main():
             recoveries += recovered.float()
             down &= ~recovered
             end_xy = torch.where(alive[:, None], xy, end_xy)
+            if (s + 1) % every == 0:
+                samples.append(end_xy.clone())
             ended = alive & (term | trunc)
             ended_fallen |= ended & (cos < .5)
             alive &= ~(term | trunc)
             prev = env.robot.data.root_pos_w[:, :2].clone()
             prev_yaw = yaw_of(env.robot.data.root_quat_w)
+    track = torch.stack(samples, dim=1)   # (n, seconds + 1, 2); frozen after a run ends
+    path_1s = torch.linalg.vector_norm(track.diff(dim=1), dim=2).sum(dim=1)
     results = []
     for i, b in enumerate(args.bundles):
         sl = slice(i * k, (i + 1) * k)
@@ -118,7 +125,8 @@ def main():
         results.append({
             'bundle': str(b), 'envs': k, 'seconds': args.seconds,
             'path_m_mean': float(path[sl].mean()), 'path_m_min': float(path[sl].min()), 'path_m_max': float(path[sl].max()),
-            'net_distance_m_mean': float(net.mean()),
+            'path_1s_m_mean': float(path_1s[sl].mean()), 'path_1s_m_min': float(path_1s[sl].min()), 'path_1s_m_max': float(path_1s[sl].max()),
+            'net_distance_m_mean': float(net.mean()), 'net_distance_m_min': float(net.min()), 'net_distance_m_max': float(net.max()),
             'path_speed_cm_s': float(path[sl].mean()) / args.seconds * 100,
             'path_cm_per_30s_window_mean': [round(float(v) * 100, 1) for v in windows[sl].mean(0)],
             'upright_time_fraction': float(upright_steps[sl].mean()) / steps,
@@ -128,6 +136,9 @@ def main():
         })
         print(json.dumps(results[-1]), flush=True)
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    import numpy as np
+    np.savez_compressed(args.output.with_suffix('.npz'), track_xy_m=(track - start[:, None, :]).cpu().numpy(),
+                        bundles=np.array([str(b) for b in args.bundles]), envs_per_bundle=k)
     args.output.write_text(json.dumps({'args': {k2: str(v) for k2, v in vars(args).items()}, 'physics': str(physics),
                                        'results': results}, indent=1) + '\n')
 
