@@ -118,7 +118,9 @@ def main():
     parser.add_argument('--margin-ticks', type=int, default=100)
     parser.add_argument('--acceleration', type=int, default=254)
     parser.add_argument('--settle-s', type=float, default=1.0, help='live: hold home before the first policy step')
-    parser.add_argument('--max-feedback-age-s', type=float, default=0.04, help='servo/IMU sample age limit (2 policy steps)')
+    parser.add_argument('--max-feedback-age-s', type=float, default=0.04, help='servo state age limit (2 policy steps)')
+    parser.add_argument('--max-imu-age-s', type=float, default=0.06,
+                        help='IMU sample age limit (3 steps: a BNO085 on bit-banged I2C occasionally misses one 20 ms report)')
     parser.add_argument('--timeout-ms', type=float, default=10.0)
     parser.add_argument('--allow-unvalidated-physics', action='store_true',
                         help='live: run a policy whose physics is not validated against the real robot (operator decision)')
@@ -172,7 +174,7 @@ def main():
         home_ticks = jmap.to_ticks(home)
         if np.any(home_ticks < lower) or np.any(home_ticks > upper):
             raise SystemExit(f'Home pose {home_ticks.tolist()} lies outside the servo windows {lower.tolist()}..{upper.tolist()}')
-        sample = first_imu_sample(imu, args.max_feedback_age_s)
+        sample = first_imu_sample(imu, args.max_imu_age_s)
         print(f'IMU gravity in the base frame {np.round(sample["gravity"], 3).tolist()} (upright and level: [0, 0, -1])')
         print(f'policy {args.bundle} ({manifest["policy_sha256"][:12]}), {contract.policy_hz:g} Hz, mode {args.mode}; '
               f'servo ids {jmap.ids}, virtual joints {jmap.virtual}; home ticks {home_ticks.tolist()}')
@@ -229,7 +231,7 @@ def main():
                 abort = f'servo state {state_age * 1e3:.0f} ms old'
                 break
             try:
-                sample = imu.read(args.max_feedback_age_s)
+                sample = imu.read(args.max_imu_age_s)
             except RuntimeError as error:
                 abort = f'IMU: {error}'
                 break
@@ -300,7 +302,7 @@ def main():
             'hardware': hardware, 'joint_map_sha256': sha256(joint_map_path), 'servo_ids': jmap.ids,
             'virtual_joints': jmap.virtual, 'seconds': args.seconds, 'ramp_s': args.ramp_s, 'margin_ticks': args.margin_ticks,
             'window_ticks': [lower.tolist(), upper.tolist()] if servos_before else None,
-            'max_feedback_age_s': args.max_feedback_age_s, 'settle_s': args.settle_s, 'imu_rotation_used': rotation.tolist(), 'state_block': list(STATE_BLOCK), 'safety_limits': limits.__dict__,
+            'max_feedback_age_s': args.max_feedback_age_s, 'max_imu_age_s': args.max_imu_age_s, 'settle_s': args.settle_s, 'imu_rotation_used': rotation.tolist(), 'state_block': list(STATE_BLOCK), 'safety_limits': limits.__dict__,
             'policy_steps': len(steps.rows['step_time_s']), 'torque_release': torque_release, 'abort': abort, 'interrupted': interrupted, 'finished': finished,
             'summary': summary,
             'writes': [{'register': n, 'sent_ns': s, 'flushed_ns': f, 'values': v} for n, s, f, v in recorder.events],
