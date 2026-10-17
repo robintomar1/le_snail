@@ -165,9 +165,14 @@ def main():
     steps = Steps()
     ramp_log = {'ramp_time_s': [], 'ramp_gravity': []}   # IMU during the start ramp and hold
     servos_before = servos_after = None
+    lower = upper = None
     torque_on, finished, abort, interrupted, torque_release = False, False, None, False, None
     try:
         servos_before = dump_servos(bus, jmap.ids)
+        missing = [sid for sid in jmap.ids if not servos_before[str(sid)].get('answered') or 'registers' not in servos_before[str(sid)]]
+        if missing:
+            raise SystemExit(f'Servo id {", ".join(map(str, missing))} did not answer the start-up register dump '
+                             '(12 V on? servo cable seated?); nothing written')
         expected = joint_map.get('valid_while_eeprom_homing_offset', {})
         found = {str(sid): servos_before[str(sid)]['registers']['Homing_Offset'] for sid in jmap.ids}
         wrong = {sid: (found[sid], expected[sid]) for sid in expected if sid in found and found[sid] != expected[sid]}
@@ -330,7 +335,7 @@ def main():
             'physics_override': bool(live and args.allow_unvalidated_physics and not manifest.get('physics_validated')),
             'hardware': hardware, 'joint_map_sha256': sha256(joint_map_path), 'servo_ids': jmap.ids,
             'virtual_joints': jmap.virtual, 'cpu_affinity': hardware.get('cpu_affinity'), 'seconds': args.seconds, 'ramp_s': args.ramp_s, 'margin_ticks': args.margin_ticks,
-            'window_ticks': [lower.tolist(), upper.tolist()] if servos_before else None,
+            'window_ticks': [lower.tolist(), upper.tolist()] if lower is not None else None,
             'max_feedback_age_s': args.max_feedback_age_s, 'max_imu_age_s': args.max_imu_age_s, 'settle_s': args.settle_s, 'imu_rotation_used': rotation.tolist(), 'state_block': list(STATE_BLOCK), 'safety_limits': limits.__dict__,
             'policy_steps': len(steps.rows['step_time_s']), 'torque_release': torque_release, 'abort': abort, 'interrupted': interrupted, 'finished': finished,
             'summary': summary,

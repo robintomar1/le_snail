@@ -279,3 +279,10 @@ def test_require_upright_refuses_to_start_the_policy_on_a_fallen_robot(run, tmp_
 def test_ramp_imu_is_logged_on_normal_runs_too(run, tmp_path):
     meta = run(SimServos(), make_bundle(tmp_path / 'b', [0.0] * 6), extra=['--allow-unvalidated-physics'])
     assert meta['abort'] is None and len(meta['log']['ramp_gravity']) == len(meta['log']['ramp_time_s']) > 5
+
+
+def test_a_servo_missing_from_the_start_dump_is_reported_not_masked(run, tmp_path):
+    sim = SimServos()
+    del sim.memory[3]                      # e.g. the elbow does not answer
+    with pytest.raises(SystemExit, match='id 3'):
+        run(sim, make_bundle(tmp_path / 'b', [0.0] * 6), mode='shadow')
