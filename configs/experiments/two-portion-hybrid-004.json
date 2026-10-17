@@ -1,0 +1,261 @@
+{
+ "parameters_measured": false,
+ "contact_geometry_validated": false,
+ "physics_dt": 0.005,
+ "stiffness_nm_rad": 12.0,
+ "damping_nm_s_rad": 0.5,
+ "effort_limit_nm": 1.5,
+ "velocity_limit_rad_s": 4.0,
+ "initial_height_m": 0.03,
+ "side_height_m": 0.18,
+ "static_friction_range": [
+  0.35,
+  0.75
+ ],
+ "dynamic_friction_ratio": 0.8,
+ "mass_scale_range": [
+  0.9,
+  1.4
+ ],
+ "gain_scale_range": [
+  0.8,
+  1.2
+ ],
+ "max_action_delay_steps": 1,
+ "position_noise_std_rad": 0.003,
+ "gyro_noise_std_rad_s": 0.02,
+ "gravity_noise_std": 0.01,
+ "drag_force_range_n": [
+  0.05,
+  0.3
+ ],
+ "drag_velocity_scale_m_s": 0.02,
+ "tether_attachment_base_m": [
+  -0.03,
+  0.0,
+  0.05
+ ],
+ "recovery_start_fraction": 0.35,
+ "max_fallen_time_s": 30.0,
+ "protected_points": [],
+ "protected_points_validated": false,
+ "settled_starts": {
+  "upright": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.039472855627536774,
+    0.9558178782463074,
+    -0.0004111308080609888,
+    0.29395607113838196,
+    0.0013960389187559485
+   ],
+   "joint_rad": [
+    0.0014106598682701588,
+    -0.6194220781326294,
+    1.0809744596481323,
+    -0.5362148880958557,
+    0.003298228606581688,
+    0.34972134232521057
+   ]
+  },
+  "left": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.05773790925741196,
+    0.6705037951469421,
+    0.7415876984596252,
+    0.01997608132660389,
+    -0.008564465679228306
+   ],
+   "joint_rad": [
+    0.002013709396123886,
+    -0.6000331044197083,
+    1.1032377481460571,
+    -0.49915096163749695,
+    0.007237274665385485,
+    0.3500300645828247
+   ]
+  },
+  "right": {
+   "root_pose": [
+    0.0,
+    0.0,
+    0.05886935442686081,
+    0.6677265167236328,
+    -0.7443643808364868,
+    0.007851768285036087,
+    0.001202095067128539
+   ],
+   "joint_rad": [
+    -0.003763316897675395,
+    -0.6007824540138245,
+    1.1054562330245972,
+    -0.499457985162735,
+    0.0002845333074219525,
+    0.35001492500305176
+   ]
+  }
+ },
+ "settled_start_asset_sha256": "224e2afa2c0528140717bdf530b2f3334daaf87e7072bf4b913d0ab1ce3f2984",
+ "settled_start_contract_fingerprint": "4f23c9185ab0b7255e21837c300078f951c026891190e5b9b0fbe713c3cab12c",
+ "settled_start_provenance": {
+  "report": "runs/physics-v2-prepare-001/report.json",
+  "report_sha256": "7b06d38da5fca7c8254f995e14e5ebd58ffb8cf5731ea2cace02f1b4a915274b",
+  "meaning": "Nominal physics-v2 rest after20s home hold, zero-velocity reset; xy recentered. Provisional mass/actuators, not physically measured."
+ },
+ "effort_limit_range_nm": [
+  0.98,
+  2.94
+ ],
+ "velocity_limit_range_rad_s": [
+  3.0,
+  4.7
+ ],
+ "physics_revision": "physics-v2-provisional-001",
+ "base_payload": {
+  "measured": false,
+  "mass_kg": 0.05,
+  "center_m": [
+   -0.03,
+   0.0,
+   0.055
+  ],
+  "box_size_m": [
+   0.07,
+   0.05,
+   0.025
+  ],
+  "estimate_breakdown_kg": {
+   "controller_board": 0.016,
+   "imu_development_board": 0.01,
+   "additional_imu_mount": 0.015,
+   "local_wires_fasteners": 0.009
+  },
+  "basis": "50g provisional sum: controller product listing16g (not weighed bare board); IMU carrier10g, additional mount15g and local wires/fasteners9g are engineering estimates. Existing CAD Waveshare mounting plate already in base is not counted again. Box geometry/COM are estimated, not a collision or protected-clearance model. External tether mass is not added to links; drag model retained.",
+  "sources": [
+   "https://www.waveshare.com/product/modules/motors-servos/bus-servo-adapter-a.htm",
+   "https://www.xsens.com/hubfs/Downloads/Manuals/mti-1-series_DK3_user_manual.pdf"
+  ]
+ },
+ "actuator_provenance": {
+  "source": "https://www.feetechrc.com/525603.html",
+  "variant": "12V ST-3215-C018, user sticker identifies12VSTS3215; detailed suffix not independently measured",
+  "rated_nm": 0.980665,
+  "stall_nm": 2.941995,
+  "no_load_rad_s": 4.717106,
+  "servo_mass_kg": 0.055,
+  "nominal_rationale": "1.5Nm is the lower approved provisional choice between rated and stall;4rad/s below catalog no-load. Independent box limits do not model torque-speed or thermal/current envelope. Not continuous ratings or hardware authorization."
+ },
+ "velocity_constraint_provisional_notes": {
+  "decision_utc": "2026-10-14T13:13:40Z",
+  "coordinator": "LAPTOP; user-approved P\u2192D/W scope",
+  "source_config_sha256": "49521bf5741c0ddda846265098af58a6fa28d02748879a14a0fe7becd57233c8",
+  "physics_changed": false,
+  "semantics": "velocity_limit_sim is a joint velocity constraint. PhysX drive/contact/limit corrections can conflict; observed brief PD-opposing overspeed is provisionally accepted, not a proven physical back-drive model. No artificial clamp.",
+  "evidence": "runs/physics-v2-speed-audit-001; runs/physics-v2-review-001/speed-analysis.json",
+  "monitoring": "Per completed physics step before autoreset: actual per-environment caps, peak absolute joint speed, environment-time fraction over cap+0.001rad/s. Flag >1% time or estimated PD-driven overspeed sustained >=0.05s. PD sign is a proxy, not measured solver torque.",
+  "unvalidated": "Actuator torque-speed/thermal/back-drive properties and contact geometry remain unmeasured; numerical convergence probes do not establish hardware fidelity.",
+  "primary_reference": "https://nvidia-omniverse.github.io/PhysX/physx/5.6.0/docs/Articulations.html"
+ },
+ "policy_rate_50hz_provenance": {
+  "decision": "robin, directly in the GPU session 2026-10-15 ~04:30 UTC: \"change the rate of policy to 50 hz\"",
+  "base_config": "configs/experiments/physics-v2-002.json",
+  "base_config_sha256": "2025ea21964f07a2685f98cbe3fea3e03d5c3e93770fea87f1b557707d20287b",
+  "settled_starts": "Same rest states (20 s home hold; rate-independent once settled), re-bound from contract 10395fc54767f4a881b9ade79d941aaa6a6d70cc6ddfc689dd8f24abbe40dbaa to the 50 Hz contract. Passive stillness at 50 Hz is re-checked by the hold batches of the next zero-training run.",
+  "action_delay": "max_action_delay_steps stays 1 step, now 20 ms instead of 50 ms; real latency is still unmeasured."
+ },
+ "reward": {
+  "type": "two_portion",
+  "standing_per_s": 0.25,
+  "standing_ramp_cos": [
+   -0.1,
+   0.8
+  ],
+  "forward_per_m": 30.0,
+  "forward_gate_cos": [
+   0.5,
+   0.8
+  ],
+  "getup_progress_weight": 2.0,
+  "effort_weight": 0.02,
+  "getup_progress_bank": "configs/rewards/getup-progress-bank-001.npz",
+  "getup_progress_bank_sha256": "0b0b4deb06a710114a542211c23b074ce59ea08834fbb84a2ccb9a4f0968207c",
+  "forward_requires_crawl_mode": true,
+  "uprightness": "roll_pitch",
+  "pitch_bound_deg": [
+   45.0,
+   60.0
+  ],
+  "lane_per_s": 0.5,
+  "lane_band_m": [
+   0.1,
+   0.15
+  ],
+  "contact_per_s": 4.0,
+  "support_bodies": [
+   "base_link",
+   "gripper_link",
+   "moving_jaw_so101_v1_link"
+  ],
+  "forward_heading_floor": 0.25,
+  "forward_heading_band_deg": [
+   15.0,
+   60.0
+  ]
+ },
+ "reward_provenance": {
+  "decision": "robin, directly in the GPU session 2026-10-15: stop training; two portions (forward, standing up); derive standing-up from the scripted get-ups; approved \"implement it and verify in sim\" ~04:41 UTC.",
+  "evidence": "runs/getup-reward-derivation-001 (held-out scripted successes positive from 1 s; failures ~0; lying 0; flailing ~0) and runs/two-portion-reward-analysis-001 (orderings).",
+  "base_config": "configs/experiments/physics-v2-50hz-001.json",
+  "base_config_sha256": "3eeaea6ec929a3028d5a6c102bfa81e0c1df8358dca755db5b2ebbd4e8af56e3",
+  "removed_terms": {
+   "positive_progress_upright_range": [
+    0.5,
+    0.8
+   ],
+   "yaw_cost_weight": 1.0,
+   "side_upright_progress_reward_cap": 1.0
+  },
+  "old_terms_not_used": "tilt, lateral, time, yaw, one-sided progress gate and capped side-start shaping are replaced by the two portions.",
+  "contract": "configs/policy-50hz-001.json",
+  "revision_002": {
+   "base_config": "configs/experiments/two-portion-001.json",
+   "base_config_sha256": "53c1e5a7ef4e1b42c7eeade231b61bc1e15f380b53d1b4371d945bed46a01956",
+   "change": "Forward ground is paid only in crawling mode (after a stable upright, cos >= 0.8 for 0.5 s, until the next fall below cos 0.5).",
+   "reason": "runs/two-portion-verification-003: a failed left get-up lunged ~2 cm forward while partly tipped (max cos 0.70) and kept +0.63 forward reward after falling. Repeated half-rise/lunge/fall could have farmed forward reward without standing.",
+   "code": "Progress potential computed in float64 (GPU float32 picked different neighbours near ties, ~1e-4 in Phi)."
+  }
+ },
+ "reward_refinements_provenance": {
+  "issue": "#15",
+  "basis": "laptop #13 synthesis (2026-10-15 08:32:42Z) and runs/gait-scores-two-portion-001",
+  "note": "two-portion-002 plus: roll-based uprightness with a 45-60 deg pitch bound for the standing and forward portions (the get-up potential and crawl mode keep the acceptance cosine); lane band 10-15 cm (scripted get-ups shift the base 10-11.6 cm sideways, runs/evaluation-hybrid-001-dev-6000); world heading band 30-90 deg while upright; non-support ground contact while upright (4/s: the lowest round weight that ranks rock D above rock A in runs/gait-scores-two-portion-003); heading term REMOVED from two-portion-hybrid-002 (robin, 2026-10-16: no heading correction needed) two-portion-hybrid-004 (robin, direct, 2026-10-17: \"yeah go ahead, look at the data at 50 training steps and only go till 100 if you see improvement\"): 002 plus forward pay scaled by heading, full within 15 deg of +x, falling linearly to 25% at 60 deg and beyond (forward_heading_floor 0.25, forward_heading_band_deg [15, 60]). Replaces 003's crawl-only heading penalty, which the policy escaped by hovering below crawl mode. A pay cut cannot be escaped: being down or hovering earns no forward pay at any heading."
+ },
+ "handover": {
+  "teacher": "hybrid",
+  "controller": "configs/controllers/hybrid-001.json",
+  "controller_sha256": "2f4500311e1d18ecbb2e4035aacea8d6e164ec130eb93fb7d50aa505daab768c",
+  "fraction_of_starts": 0.5,
+  "max_prefix_s": {
+   "upright": 12.0,
+   "side": 6.0
+  },
+  "note": "Track B (#15): in half of all training episodes the hybrid scripted controller (#14) acts for a uniform random prefix (upright: 0.02-12 s of the rock-D gait; side: 0.02-6 s of settle and get-up), then the learner takes over from that state. Teacher steps are excluded from PPO (MaskedPPO) and earn the learner nothing; evaluation never uses prefixes."
+ },
+ "distal_mass_scale_range": [
+  0.7,
+  1.6
+ ],
+ "distal_bodies": [
+  "wrist_link",
+  "gripper_link",
+  "moving_jaw_so101_v1_link"
+ ],
+ "mass_randomization_provenance": {
+  "issue": "#15",
+  "basis": "robin via laptop 2026-10-16 16:26:40Z: 'keep mass robust, we can have this much difference'; measured arm ~0.80 kg assembled vs 0.682 kg nominal; custom gripper of unknown mass",
+  "note": "whole-arm scale 0.9-1.4 x nominal, times an independent 0.7-1.6 on wrist, gripper and jaw (robust stage only). Gripper-floor friction is not randomized independently yet (materials are per shape here)."
+ }
+}

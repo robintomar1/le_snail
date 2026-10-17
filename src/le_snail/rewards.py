@@ -17,6 +17,8 @@ Optional refinements (#15; absent keys keep the earlier behaviour exactly):
   lane_per_s:     -w * dt * ramp(|y - y_start|, lane_band_m)                   always
   heading_per_s:  -w * dt * ramp(|yaw|, heading_band_deg) * gate               world heading against +x
       (heading_requires_crawl_mode: also * crawling, so get-ups and the turn they leave are not charged)
+  forward_heading_floor: forward *= 1 - (1 - floor) * ramp(|yaw|, forward_heading_band_deg)
+      straight crawling earns more; a pay cut instead of a charge, so lying down or hovering is never better
   contact_per_s:  -w * dt * [a non-support link touches the ground] * gate     support = base and gripper
 """
 import math
@@ -83,6 +85,9 @@ def two_portion_terms(config, bank, *, upright, features, x, x_record, previous_
     following = torch.where(terminated, torch.zeros_like(phi), phi)
     shaping = config['getup_progress_weight'] * (gamma * following - previous_phi)
     shaping = torch.where(torch.isfinite(previous_phi), shaping, torch.zeros_like(shaping))
+    if 'forward_heading_floor' in config:
+        low, high = (math.radians(v) for v in config['forward_heading_band_deg'])
+        forward_gate = forward_gate * (1. - (1. - config['forward_heading_floor']) * ramp(yaw.abs(), low, high))
     terms = {'getup_progress': shaping,
              'standing': config['standing_per_s'] * dt * stand,
              'forward': config['forward_per_m'] * forward_gate * (x - x_record).clamp_min(0.),

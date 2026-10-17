@@ -1,0 +1,47 @@
+{
+ "schema_version": 1,
+ "description": "Faster crawl gait for the gait clone (#15): the gait study's A-fast-pitch-rock (runs/gait-study-rock/best.json alternates) with shoulder_pan offset c +0.02, which cancels its sideways slide in robust sim (runs/gait-sweep-003). Gait block only (no get-up); use with src/le_snail/gait_teacher.py PhaseGait.",
+ "contract": "configs/policy-50hz-001.json",
+ "contract_sha256": "ae11c223535a0903340cc034f8dd644fedeaba94e093a9ec1d4463aa550a64dd",
+ "gait": {
+  "name": "A-fast-pan+0.02",
+  "source": "runs/gait-study-rock/best.json",
+  "source_sha256": "083c1a8707afa7ba061a145add2b7f2f774934a52edf0fbfb8e872b39e7a7797",
+  "T": 2.7990160380870766,
+  "k": 0.1483574198174586,
+  "c": [
+   0.04730526954540504,
+   0.7533836123050708,
+   -0.6816595930489107,
+   -0.6995135618491032,
+   0.3331415298857422,
+   -0.5258398041344126
+  ],
+  "A": [
+   0.22854424148046343,
+   0.7562431284776319,
+   0.5173446207101196,
+   0.5094190884914048,
+   0.4315942407060764,
+   0.27849666988363375
+  ],
+  "psi": [
+   0.0,
+   0.5748817052389318,
+   0.395028104314724,
+   4.319427995906773,
+   4.521762401085806,
+   5.948000340861113
+  ],
+  "m": [
+   1,
+   2,
+   2,
+   2,
+   1,
+   2
+  ],
+  "ramp_s": 2.0,
+  "units": "normalized actions; target = home + a * action_scale"
+ }
+}

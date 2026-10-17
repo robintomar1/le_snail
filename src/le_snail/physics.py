@@ -112,6 +112,12 @@ def load_physics(path):
         for key in ('forward_requires_crawl_mode', 'heading_requires_crawl_mode'):
             if key in reward and type(reward[key]) is not bool:
                 raise ValueError(f'Reward {key} must be a boolean')
+        if 'forward_heading_floor' in reward:
+            floor, band = reward['forward_heading_floor'], reward.get('forward_heading_band_deg', [])
+            if type(floor) not in (int, float) or not 0 <= floor <= 1:
+                raise ValueError('Reward forward_heading_floor must be within [0, 1]')
+            if len(band) != 2 or not all(type(b) in (int, float) for b in band) or not 0 <= band[0] < band[1] <= 180:
+                raise ValueError('Reward forward_heading_band_deg must be an increasing interval within [0, 180] degrees')
         digest = reward.get('getup_progress_bank_sha256', '')
         if not reward.get('getup_progress_bank') or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
             raise ValueError('Reward needs a get-up progress bank path and its sha256')

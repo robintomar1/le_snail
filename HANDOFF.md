@@ -15,6 +15,33 @@ The user has approved implementation, remote workspace setup, Docker builds, sim
 
 ## Current runtime status and exact blocker
 
+### Faster gait clone and 3-minute endurance comparison (2026-10-17)
+
+- robin: "GIVE ME ANOTHER VERSION OF IT WHICH IS FASTER". Gait sweeps (`scripts/sweep_gaits.py`, `runs/gait-sweep-00{1,2,3}`): shortening D's period makes it slower (slew-limited). The gait study's A-fast slides sideways, and its drift is set by the shoulder_pan offset (+/-0.075 rad flips it across the lane). With pan c +0.02 (`configs/controllers/fast-gait-001.json`) it runs 6.3 cm/s robust, against D's 3.6. Clone `runs/gait-clone-fast-001`: robust dev 5660-5674 crawl 5/5, 50 cm in 9.2-11.2 s.
+- robin: "TURNING IS ALSO FINE BUT IT SHOULD MOVE". `scripts/endurance.py`: 180 s, robust, lane limit off, 32 envs per bundle (`runs/endurance-002`, per-env tracks in npz). Mean net distance from start / path on 1 s samples:
+  - gait-clone-fast-001: 10.9 m / 11.3 m, 0 falls;
+  - hybrid-001: 6.1 / 6.3;
+  - gait-clone-001: 6.0 / 6.3;
+  - B-clean-drag: 2.8 / 2.8;
+  - 002-500, 004-550, 004-600: 0.4-0.55 / 7.6-8.5. They circle: always moving, but they stay put. 004-550 falls 2.2 times per run and recovers 2.1;
+  - old 20 Hz policies: diversity-seed101-100 3.8 / 10.1, the rest 0.3-1.4 m net; handover-truncation and handover-reward end fallen in about half the runs.
+
+### gait-clone-001: hybrid-001's crawl gait cloned into an ordinary 24-input policy; crawl 5/5 (2026-10-17)
+
+- robin (direct): "can we make a new policy to crawl like the hybrid gait?"
+- Teacher: `src/le_snail/gait_teacher.py` PhaseGait, the D-balanced gait with its phase read off the applied target (nearest point on the steady-state slewed cycle, searched just ahead) instead of a clock (a9af1bc). Bundle `runs/phase-gait-001/exported` (`export_hybrid.py --phase-gait`). Robust dev 5600-5614: crawl 5/5, 3.3-4.0 cm/s, |yaw| <= 8 deg, lateral <= 2 cm.
+- Student: `scripts/clone_gait.py`, DAgger over 1024 robust upright envs, 6 x 15 s rounds (beta 1, .5, .25, 0, 0, 0), a frozen obs normalizer plus MLP 24-128-128-6 ELU (the RSL actor's shape). About 2.5 min. Run `runs/gait-clone-001`; bundle `runs/gait-clone-001/exported` (`student.pt` holds the weights). Student terminations fell from 1.45 to 0.51 per env-minute over the pure-student rounds.
+- Robust dev 5620-5634: CRAWL 5/5 in 15.4-18.0 s, 3.2-3.8 cm/s, final |yaw| <= 6 deg, lateral <= 2.5 cm. Left/right 0/5 (no get-up, as expected). No speed flags; the video shows the rock-and-drag gait.
+- Next (robin to decide): merge with 004-600's get-ups into one policy (DAgger with a composite teacher: PhaseGait while upright, 004-600 while down), and/or try the clone on the real arm through the laptop's runner.
+
+### two-portion-hybrid-004 (forward pay scaled by heading): done at 100 by robin's cap; crawl 2/5, left 5/5, right 5/5 (2026-10-17)
+
+- robin (direct): "yeah go ahead, look at the data at 50 training steps and only go till 100 if you see improvement". Config `configs/experiments/two-portion-hybrid-004.json` = 002 + `forward_heading_floor` 0.25 over `forward_heading_band_deg` [15, 60] (commit a6d7bdb). Resumed from 002-500.
+- At 50 (`runs/two-portion-hybrid-004-550`, iterations 495-544): official get-ups ~95-100% both sides; upright falls 250-848/window (limit 926); noise std 3.02 -> 3.43. Dev eval 5540-5554: crawl 2/5 (mean |final heading| 103 vs 135), LEFT 5/5, RIGHT 4/5. Videos show genuine crawling and get-ups, so CONTINUE by the pre-registered rule. Last 50 ran -> `runs/two-portion-hybrid-004-600`.
+- At 100 (END of robin's cap; `runs/two-portion-hybrid-004-600`, iterations 544-593): training get-ups ~95-100%, upright falls 668 -> 268/window, noise std 3.50 -> 3.96. Dev eval 5560-5574: crawl 2/5 (mean |final heading| back to 135; all 3 fails are lane exits at 42-49 cm), LEFT 5/5, RIGHT 5/5, so not a candidate. Crawl/left/right: 002-500 1/5/5, 004-550 2/5/4, 004-600 2/5/5.
+- Diagnosis: the 001 contract gives the policy no heading (q, qd, gravity, gyro, previous action; feed-forward, no memory), so it cannot steer back to +x. Proposed to robin: contract 002 with sin/cos of yaw relative to the start, warm-started from 004-600 with zero first-layer weights for the new inputs.
+- Also: evaluate.py traces now carry observation, action_raw, target_rad and applied_target_rad (7b8c3ff). A rerun of the 002-500 dev eval on 5480 reproduces it exactly. Real-arm deployment reference for 002-500 (target ranges, step 0-10 observations and actions): `runs/deployment-reference-002-500/deployment-reference.json`.
+
 ### best_forward_move_1 recorded (robin via coordinator, 2026-10-17)
 
 - The hybrid-001 rock-and-drag gait "D-balanced", the one that moved the real arm forward, is frozen as `runs/best_forward_move_1/` (copies of the frozen bundle, controller config and module, contract, and 50 Hz crawl targets; `manifest.json` holds the sha256 of each file, the gait parameters and sim metrics). Tracked pointer: `configs/controllers/best_forward_move_1.json`. hybrid-001 and `runs/hybrid-001-frozen` are unchanged. Speed re-tuning is not approved yet.

@@ -106,6 +106,7 @@ try:
                         center = env.robot.data.body_link_pos_w[0].mean(dim=0).cpu().numpy()
                         center[2] = max(.08, center[2])
                         env.sim.set_camera_view(eye=center + np.array([.5, .5, .35]), target=center)
+                    observation = obs['policy'][0].tolist()
                     actions = policy(obs['policy'])
                     obs, _, term, trunc, _ = env.step(actions)
                     pos, gravity, contact = env.last_transition
@@ -122,7 +123,11 @@ try:
                                             # Pose before any auto-reset; joints are read after the step (reset values on a terminal step).
                                             'root_pos_w': (pos[0] - env.scene.env_origins[0]).tolist(),
                                             'root_quat_w': env.last_transition_quat[0].tolist(),
-                                            'joint_pos_rad': env.robot.data.joint_pos[0, env.joint_ids].tolist()}) + '\n')
+                                            'joint_pos_rad': env.robot.data.joint_pos[0, env.joint_ids].tolist(),
+                                            # The policy's input and raw output this step, and the joint targets it led to:
+                                            # target after the contract's clip/scale/limits/slew, applied_target after the action delay.
+                                            'observation': observation, 'action_raw': actions[0].tolist(),
+                                            'target_rad': env.target[0].tolist(), 'applied_target_rad': env.applied_target[0].tolist()}) + '\n')
                     if writer is not None:
                         frame = env.terminal_frame if bool(term[0] or trunc[0]) else env.render()
                         if frame is not None:
