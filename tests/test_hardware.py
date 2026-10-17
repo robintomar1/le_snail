@@ -217,3 +217,14 @@ def test_bno085_gives_base_frame_gravity_and_goes_stale_when_reports_stop():
             imu.read(0.05)
     finally:
         imu.close()
+
+
+def test_out_of_order_samples_at_startup_restart_the_decoder_but_not_later():
+    from le_snail.hardware import XsensStream
+    stream = XsensStream(np.eye(3), warmup_s=0.5)
+    assert stream.handle(0x36, mtdata2(10, 5000), 0.00)['seq'] == 10
+    assert stream.handle(0x36, mtdata2(3, 1000), 0.10) is None        # stale backlog packet at port open
+    assert stream.handle(0x36, mtdata2(4, 1100), 0.11) is not None     # decoder restarted from the new packet
+    assert stream.handle(0x36, mtdata2(5, 1200), 0.12)['seq'] == 5
+    with pytest.raises(ValueError, match='out-of-order'):
+        stream.handle(0x36, mtdata2(2, 900), 0.90)                    # after the warm-up it is fatal

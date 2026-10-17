@@ -270,9 +270,16 @@ class XsensStream:
         try:
             return self.decoder.decode(payload, received_at)
         except ValueError as exc:
-            if received_at - self.started_at <= self.warmup_s and 'missing data identifier' in str(exc):
-                self.skipped_warmup_packets += 1
-                return None
+            if received_at - self.started_at <= self.warmup_s:
+                if 'missing data identifier' in str(exc):
+                    self.skipped_warmup_packets += 1
+                    return None
+                if 'out-of-order' in str(exc):
+                    # Backlog packets from before the port opened can interleave with live ones; restart the
+                    # decoder so the live stream defines the sequence and clock. Seen on the Rubik Pi 2026-10-17.
+                    self.decoder = ImuDecoder(self.decoder.mounting)
+                    self.skipped_warmup_packets += 1
+                    return None
             raise
 
 
