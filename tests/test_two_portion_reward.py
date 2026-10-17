@@ -83,7 +83,8 @@ def test_shaping_is_zero_on_first_step_uses_zero_terminal_potential_and_nets_zer
 def test_two_portion_config_validation(tmp_path):
     config = json.loads((ROOT / 'configs/experiments/two-portion-001.json').read_text())
     assert load_physics(ROOT / 'configs/experiments/two-portion-001.json')['reward']['type'] == 'two_portion'
-    for key, value in (('type', 'old'), ('standing_per_s', -1.), ('forward_gate_cos', [.8, .5]), ('getup_progress_bank_sha256', 'x')):
+    for key, value in (('type', 'old'), ('standing_per_s', -1.), ('forward_gate_cos', [.8, .5]), ('getup_progress_bank_sha256', 'x'),
+                       ('forward_heading_floor', 1.5)):
         broken = json.loads(json.dumps(config))
         broken['reward'][key] = value
         path = tmp_path / 'broken.json'
@@ -166,6 +167,24 @@ def test_heading_can_be_limited_to_crawl_mode():
         return float(terms['heading'][0])
     assert heading(False) == 0.
     assert heading(True) == pytest.approx(-1. * .02)
+
+
+def test_forward_pay_falls_with_heading_to_the_floor():
+    config = {**REFINED, 'forward_heading_floor': .25, 'forward_heading_band_deg': [15., 60.]}
+    upright = _gravity(0., 20.)
+
+    def forward(yaw_deg):
+        terms, _, _ = two_portion_terms(config, _far_bank(), upright=-upright[:, 2], features=torch.zeros((1, 9)), x=torch.tensor([.1]),
+                                        x_record=torch.tensor([0.]), previous_phi=torch.tensor([float('nan')]), terminated=torch.tensor([False]),
+                                        command_rate=torch.zeros((1, 6)), dt=.02, gamma=.998, crawling=torch.tensor([True]), gravity=upright,
+                                        lateral=torch.tensor([0.]), yaw=torch.tensor([math.radians(yaw_deg)]), other_contact=torch.tensor([False]))
+        return float(terms['forward'][0])
+    full = forward(0.)
+    assert full > 0
+    assert forward(-10.) == pytest.approx(full)
+    assert forward(37.5) == pytest.approx(full * .625)
+    assert forward(-75.) == pytest.approx(full * .25)
+    assert forward(180.) == pytest.approx(full * .25)
 
 
 def test_configs_without_refinements_are_unchanged():
