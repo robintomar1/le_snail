@@ -1,0 +1,56 @@
+{
+  "schema": "le-snail-joint-map-1",
+  "status": "arm 1 (snail_1) after its LeRobot recalibration of 2026-10-17/18 (new homing offsets, limits and a calibrated gripper servo id 6 at homing 232, limits 2047-3635; gripper not mapped yet). Zeros carried over from the measured 2026-10-17 map.",
+  "urdf": "assets/so101/snail.urdf",
+  "formula": "ticks = offset_ticks + sign * q_rad * 4096 / (2 pi)",
+  "valid_while_eeprom_homing_offset": {
+    "1": 593,
+    "2": 829,
+    "3": -200,
+    "4": 1373,
+    "5": -874,
+    "6": 232
+  },
+  "joints": {
+    "shoulder_pan": {
+      "id": 1,
+      "sign": 1,
+      "offset_ticks": 2166.0,
+      "uncertainty_deg": 8,
+      "evidence": "sign: IMU gyro vs pan rate (2026-10-16); offset: midpoint of EEPROM limits 806-3520 | shifted by +3 ticks for the 2026-10-18 homing offsets"
+    },
+    "shoulder_lift": {
+      "id": 2,
+      "sign": 1,
+      "offset_ticks": 2052.0,
+      "uncertainty_deg": 3,
+      "evidence": "sign: gravity sag and forearm IMU; offset: limit midpoint, limp rest lands at the URDF lower limit | shifted by -73 ticks for the 2026-10-18 homing offsets"
+    },
+    "elbow_flex": {
+      "id": 3,
+      "sign": 1,
+      "offset_ticks": 1970.5,
+      "uncertainty_deg": 3,
+      "evidence": "sign: gravity sag and forearm IMU; offset: limit midpoint, limp rest lands at the URDF upper limit | shifted by +71 ticks for the 2026-10-18 homing offsets"
+    },
+    "wrist_flex": {
+      "id": 4,
+      "sign": 1,
+      "offset_ticks": 2020.0,
+      "uncertainty_deg": 1.5,
+      "evidence": "2026-10-17 poses: ruler-straight 2063, up 90 at 1161, down 90 at 3090, hand-swept stops 871 and 3217 (midpoint 2044) | shifted by -33 ticks for the 2026-10-18 homing offsets"
+    },
+    "wrist_roll": {
+      "id": 5,
+      "sign": 1,
+      "offset_ticks": 2017.0,
+      "uncertainty_deg": 5,
+      "evidence": "2026-10-17: posed like the stock gripper at roll 0 (moving jaw upper-left seen from behind) 2063; quarter turn CCW seen from behind 3099 | shifted by -46 ticks for the 2026-10-18 homing offsets"
+    }
+  },
+  "eeprom_changes": [
+    "2026-10-17 servo 4 Min_Position_Limit 1493 -> 920 (robin OK; stops 871/3217)",
+    "2026-10-17/18 LeRobot recalibration rewrote homing offsets and limits on ids 1-6"
+  ],
+  "frame_note": "offset_ticks = 2026-10-17 offset + (old homing - new homing); the physical arm is unchanged. Cross-check against the new calibration range midpoints: lift 2052 vs 2054, elbow 1970.5 vs 1973.5, wrist 2020 vs 2023.5 (pan 2166 vs 2186.5; its sweep was asymmetric before too)."
+}

@@ -1,9 +1,9 @@
 {
   "arm": "arm 1 = snail_1 (first SO-101, ESP32-era unit; gripper servo id 6 added 2026-10-17, uncalibrated, not driven) on the Rubik Pi with the Xsens",
-  "servo_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5AE6057765-if00",
+  "servo_port": "/dev/serial/by-id/usb-1a86_USB_Single_Serial_5837053111-if00",
   "imu_port": "/dev/serial/by-id/usb-Xsens_Motion_Tracker_Dev._Board_DB2GZ7KQ-if00-port0",
   "imu_baudrate": 115200,
-  "joint_map": "configs/joint-maps/so101-esp32-arm-2026-10-17.json",
+  "joint_map": "configs/joint-maps/arm1-2026-10-18.json",
   "imu_rotation_base_from_sensor": [
     [
       -0.02,
